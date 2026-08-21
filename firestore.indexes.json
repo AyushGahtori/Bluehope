@@ -1,0 +1,121 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "searchListings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "profileStatus", "order": "ASCENDING" },
+        { "fieldPath": "serviceIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "city", "order": "ASCENDING" },
+        { "fieldPath": "rating", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "searchListings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "profileStatus", "order": "ASCENDING" },
+        { "fieldPath": "conditionIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "city", "order": "ASCENDING" },
+        { "fieldPath": "rating", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "searchListings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "profileStatus", "order": "ASCENDING" },
+        { "fieldPath": "ownerType", "order": "ASCENDING" },
+        { "fieldPath": "conditionIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "rankingFeatures.trustScore", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "searchListings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "profileStatus", "order": "ASCENDING" },
+        { "fieldPath": "primaryAgeGroup", "order": "ASCENDING" },
+        { "fieldPath": "serviceIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "rating", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "searchListings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "profileStatus", "order": "ASCENDING" },
+        { "fieldPath": "geohashPrefix5", "order": "ASCENDING" },
+        { "fieldPath": "rating", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "reviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "listingId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "moderationState", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customerUid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startsAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "providerUid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startsAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "recipientUid", "order": "ASCENDING" },
+        { "fieldPath": "read", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "childProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerUid", "order": "ASCENDING" },
+        { "fieldPath": "deletedAt", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "analyticsEvents",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "notifications",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
+      "collectionGroup": "searchHistory",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    }
+  ]
+}

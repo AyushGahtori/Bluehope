@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BlueHope
 
-## Getting Started
+BlueHope is a Next.js marketplace/discovery platform for parents, families, sole providers, and institutes.
 
-First, run the development server:
+## Local Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Firebase Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Client-side Firebase web config belongs in `.env.local` with the `NEXT_PUBLIC_FIREBASE_*` keys from `.env.example`.
 
-## Learn More
+Server-side Firestore, Storage, and ID-token verification require Firebase Admin service-account values:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+FIREBASE_ADMIN_PROJECT_ID=
+FIREBASE_ADMIN_CLIENT_EMAIL=
+FIREBASE_ADMIN_PRIVATE_KEY=
+FIREBASE_ADMIN_STORAGE_BUCKET=
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Never commit `.env.local`, service-account JSON, private keys, or production secrets.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Data Architecture
 
-## Deploy on Vercel
+The Firebase-native database foundation lives in:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `docs/bluehope-data-architecture.md`
+- `firestore.rules`
+- `storage.rules`
+- `firestore.indexes.json`
+- `src/models/firestore.ts`
+- `src/models/validation.ts`
+- `src/server/firebase/admin.ts`
+- `src/server/firestore/repositories.ts`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Seed development/staging data after Firebase Admin env is configured:
+
+```bash
+npm run seed:firestore
+```
+
+The seed script creates controlled taxonomy records and 50 clearly marked demo Delhi listings.

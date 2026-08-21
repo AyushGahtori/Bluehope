@@ -1,0 +1,115 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return signedIn() && request.auth.token.role is string
+        ? request.auth.token.role
+        : "";
+    }
+
+    function isModerator() {
+      return role() == "moderator" || role() == "admin";
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches("image/(jpeg|jpg|png|webp|avif)");
+    }
+
+    function isVideo() {
+      return request.resource.contentType.matches("video/(mp4|webm|quicktime)");
+    }
+
+    function isPdf() {
+      return request.resource.contentType == "application/pdf";
+    }
+
+    function under(bytes) {
+      return request.resource.size <= bytes;
+    }
+
+    match /users/{uid}/profile/{fileName} {
+      allow read: if signedIn() && (request.auth.uid == uid || isModerator());
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && isImage()
+        && under(5 * 1024 * 1024);
+    }
+
+    match /customers/{uid}/documents/{fileName} {
+      allow read: if signedIn() && (request.auth.uid == uid || isModerator());
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && (isImage() || isPdf())
+        && under(10 * 1024 * 1024);
+    }
+
+    match /providers/{providerId}/profile/{fileName} {
+      allow read: if true;
+      allow write: if signedIn()
+        && request.auth.token.providerIds != null
+        && providerId in request.auth.token.providerIds
+        && isImage()
+        && under(5 * 1024 * 1024);
+    }
+
+    match /providers/{providerId}/gallery/{fileName} {
+      allow read: if true;
+      allow write: if signedIn()
+        && request.auth.token.providerIds != null
+        && providerId in request.auth.token.providerIds
+        && isImage()
+        && under(8 * 1024 * 1024);
+    }
+
+    match /providers/{providerId}/videos/{fileName} {
+      allow read: if true;
+      allow write: if signedIn()
+        && request.auth.token.providerIds != null
+        && providerId in request.auth.token.providerIds
+        && isVideo()
+        && under(100 * 1024 * 1024);
+    }
+
+    match /institutions/{institutionId}/logo/{fileName} {
+      allow read: if true;
+      allow write: if signedIn()
+        && request.auth.token.institutionIds != null
+        && institutionId in request.auth.token.institutionIds
+        && isImage()
+        && under(5 * 1024 * 1024);
+    }
+
+    match /institutions/{institutionId}/gallery/{fileName} {
+      allow read: if true;
+      allow write: if signedIn()
+        && request.auth.token.institutionIds != null
+        && institutionId in request.auth.token.institutionIds
+        && isImage()
+        && under(8 * 1024 * 1024);
+    }
+
+    match /reviews/{reviewId}/media/{fileName} {
+      allow read: if false;
+      allow write: if signedIn()
+        && isImage()
+        && under(6 * 1024 * 1024);
+    }
+
+    match /documents/{ownerId}/{allPaths=**} {
+      allow read: if signedIn() && (request.auth.uid == ownerId || isModerator());
+      allow write: if signedIn()
+        && request.auth.uid == ownerId
+        && (isImage() || isPdf())
+        && under(10 * 1024 * 1024);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

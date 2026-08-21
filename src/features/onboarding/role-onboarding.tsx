@@ -130,7 +130,7 @@ export function RoleOnboarding() {
                 <p className="font-semibold text-slate-950">Architecture status</p>
                 <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
                   <span>Firebase auth ready</span>
-                  <span>MongoDB models ready</span>
+                  <span>Firestore data model ready</span>
                   <span>Structured conditions</span>
                   <span>Search and recommendations</span>
                 </div>

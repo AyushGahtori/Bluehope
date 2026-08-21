@@ -4,7 +4,7 @@ export function persistencePending(resource: string) {
       status: "persistence_pending",
       resource,
       message:
-        "The request shape is accepted by the BlueHope API foundation. MongoDB persistence will activate once environment configuration is provided.",
+        "The request shape is accepted by the BlueHope API foundation. Firestore persistence will activate once Firebase Admin configuration is provided.",
     },
     { status: 202 },
   );
