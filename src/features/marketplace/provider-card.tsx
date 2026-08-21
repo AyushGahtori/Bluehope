@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { Heart, Languages, MapPin, Monitor, Star, Users } from "lucide-react";
+import { Languages, MapPin, Monitor, Star, Users } from "lucide-react";
 import { Badge, Card, LinkButton } from "@/components/ui/primitives";
 import { conditions, services } from "@/data/taxonomy";
 import { formatDistance } from "@/lib/utils";
 import type { ProviderSummary } from "@/types/domain";
+import { SaveProviderButton } from "./save-provider-button";
 
 const serviceNames = new Map(services.map((service) => [service.id, service.name]));
 const conditionNames = new Map(conditions.map((condition) => [condition.id, condition.name]));
@@ -18,9 +19,9 @@ export function ProviderCard({ provider }: { provider: ProviderSummary }) {
         <Badge tone={provider.verificationStatus === "review_ready" ? "green" : "neutral"} className="absolute left-3 top-3">
           {provider.verificationStatus === "review_ready" ? "Profile reviewed" : "Trust setup pending"}
         </Badge>
-        <button className="absolute right-3 top-3 rounded-md bg-blue-50 p-2" aria-label="Save provider">
-          <Heart className="h-4 w-4" />
-        </button>
+        <span className="absolute right-3 top-3">
+          <SaveProviderButton compact />
+        </span>
       </div>
       <div>
         <Link href={href} className="text-xl font-extrabold text-slate-950 hover:text-bluehope">

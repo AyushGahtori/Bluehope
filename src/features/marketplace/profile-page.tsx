@@ -1,10 +1,11 @@
 import { Calendar, Clock, Heart, Languages, MapPin, Star } from "lucide-react";
 import { AppNav } from "@/components/layout/app-nav";
-import { Badge, Card, LinkButton, SectionTitle } from "@/components/ui/primitives";
+import { Badge, Card, SectionTitle } from "@/components/ui/primitives";
 import { conditions, services } from "@/data/taxonomy";
 import { formatDistance } from "@/lib/utils";
 import type { ProviderSummary } from "@/types/domain";
 import { MapPreview } from "./map-preview";
+import { ProfileActions } from "./profile-actions";
 
 const serviceNames = new Map(services.map((service) => [service.id, service.name]));
 const conditionNames = new Map(conditions.map((condition) => [condition.id, condition.name]));
@@ -87,17 +88,7 @@ export function ProfilePage({ profile }: { profile: ProviderSummary }) {
         </section>
 
         <aside className="space-y-6" id="contact">
-          <Card className="space-y-3 p-5">
-            <LinkButton href="/api/enquiries" className="w-full">
-              Contact Now
-            </LinkButton>
-            <LinkButton href="/api/enquiries" variant="outline" className="w-full">
-              Send Enquiry
-            </LinkButton>
-            <LinkButton href="/api/saved-providers" variant="outline" className="w-full">
-              Save Provider
-            </LinkButton>
-          </Card>
+          <ProfileActions providerName={profile.name} />
           <Card className="p-5">
             <div className="flex items-center gap-3">
               <span className="rounded-md border border-slate-200 p-3">

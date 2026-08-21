@@ -10,7 +10,7 @@ export function Button({ className, variant = "primary", ...props }: ButtonProps
   return (
     <button
       className={cn(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:translate-y-0 disabled:scale-100 disabled:opacity-60",
         variant === "primary" && "bg-bluehope text-white shadow-soft hover:bg-bluehope-dark",
         variant === "secondary" && "bg-blue-50 text-bluehope hover:bg-blue-100",
         variant === "outline" && "border border-bluehope text-bluehope hover:bg-blue-50",
@@ -37,7 +37,7 @@ export function LinkButton({
     <Link
       href={href}
       className={cn(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
+        "inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
         variant === "primary" && "bg-bluehope text-white shadow-soft hover:bg-bluehope-dark",
         variant === "secondary" && "bg-blue-50 text-bluehope hover:bg-blue-100",
         variant === "outline" && "border border-bluehope text-bluehope hover:bg-blue-50",
@@ -73,13 +73,16 @@ export function Input({ className, ...props }: ComponentPropsWithoutRef<"input">
 
 export function Select({ className, ...props }: ComponentPropsWithoutRef<"select">) {
   return (
-    <select
-      className={cn(
-        "h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-bluehope focus:ring-4 focus:ring-blue-100",
-        className,
-      )}
-      {...props}
-    />
+    <div className="relative">
+      <select
+        className={cn(
+          "h-12 w-full appearance-none rounded-[12px] border border-slate-300 bg-white px-4 pr-11 text-sm font-medium text-slate-700 outline-none transition hover:border-blue-200 focus:border-bluehope focus:ring-4 focus:ring-blue-100",
+          className,
+        )}
+        {...props}
+      />
+      <span className="pointer-events-none absolute right-4 top-1/2 h-2 w-2 -translate-y-1/2 rotate-45 border-b-2 border-r-2 border-slate-500" />
+    </div>
   );
 }
 

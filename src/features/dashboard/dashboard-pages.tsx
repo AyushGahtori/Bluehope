@@ -1,4 +1,5 @@
 import { Eye, PlusCircle, Star, Users, CheckCircle2, HeartPulse } from "lucide-react";
+import Link from "next/link";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Badge, Card, LinkButton, SectionTitle } from "@/components/ui/primitives";
 import { demoAppointments } from "@/data/demo";
@@ -7,7 +8,7 @@ const parentNav = [
   "Dashboard",
   "Search Support",
   "Saved Providers",
-  "My Enquires",
+  "My Enquiries",
   "Appointments",
   "Messages",
   "Notifications",
@@ -21,7 +22,7 @@ const providerNav = [
   "My Profile",
   "Services",
   "Appointments",
-  "Enquires",
+  "Enquiries",
   "Reviews & Ratings",
   "Messages",
   "Gallery",
@@ -34,7 +35,7 @@ const adminNav = [
   "Users",
   "Providers",
   "Services & Categories",
-  "Enquires",
+  "Enquiries",
   "Appointments",
   "Reviews & Ratings",
   "Messages",
@@ -51,8 +52,9 @@ export function ParentDashboard() {
           <p className="mt-4 max-w-xl text-lg text-slate-600">
             We are here to help you find the right support for your child&apos;s unique needs.
           </p>
-          <form className="mt-6 flex gap-3 rounded-[8px] bg-white p-2">
-            <input className="min-w-0 flex-1 px-4 outline-none" placeholder="What are you looking for today?" />
+          <form action="/search" className="mt-6 flex gap-3 rounded-[8px] bg-white p-2">
+            <input name="q" className="min-w-0 flex-1 px-4 outline-none" placeholder="What are you looking for today?" />
+            <input type="hidden" name="radius" value="20" />
             <button className="rounded-lg bg-bluehope px-8 font-semibold text-white">Search</button>
           </form>
         </Card>
@@ -130,7 +132,7 @@ export function AdminDashboard() {
       />
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.95fr_0.65fr]">
         <Card className="p-6">
-          <SectionTitle title="Enquires Overview" action={<Badge tone="neutral">Last 7 days</Badge>} />
+      <SectionTitle title="Enquiries Overview" action={<Badge tone="neutral">Last 7 days</Badge>} />
           <div className="h-72 rounded-[8px] bg-[linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[length:100%_48px]" />
         </Card>
         <EnquiryCard />
@@ -155,12 +157,13 @@ function QuickAccess() {
       <SectionTitle title="Quick Access" action={<LinkButton href="/search" variant="ghost">View all categories</LinkButton>} />
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         {[
-          ["Therapist", "Find services and providers", "bg-blue-50 text-bluehope"],
-          ["Near Me", "Find services and providers", "bg-emerald-50 text-emerald-600"],
-          ["School", "Find services and providers", "bg-rose-50 text-rose-500"],
-          ["Doctor", "Find services and providers", "bg-amber-50 text-amber-600"],
-        ].map(([title, text, tone]) => (
-          <Card key={title} className="flex items-center gap-5 p-6">
+          ["Therapist", "Find services and providers", "bg-blue-50 text-bluehope", "/search?service=speech-therapy&radius=20"],
+          ["Near Me", "Find services and providers", "bg-emerald-50 text-emerald-600", "/search?radius=10"],
+          ["School", "Find services and providers", "bg-rose-50 text-rose-500", "/search?service=special-education&radius=20"],
+          ["Doctor", "Find services and providers", "bg-amber-50 text-amber-600", "/search?service=psychological-services&radius=20"],
+        ].map(([title, text, tone, href]) => (
+          <Link key={title} href={href} className="block transition hover:-translate-y-0.5">
+          <Card className="flex items-center gap-5 p-6">
             <span className={`flex h-20 w-20 items-center justify-center rounded-[8px] ${tone}`}>
               <PlusCircle className="h-9 w-9" />
             </span>
@@ -169,6 +172,7 @@ function QuickAccess() {
               <p className="text-sm text-slate-600">{text}</p>
             </div>
           </Card>
+          </Link>
         ))}
       </div>
     </section>
@@ -220,7 +224,7 @@ function AppointmentCard() {
 function EnquiryCard() {
   return (
     <Card className="p-6">
-      <SectionTitle title="Recent Enquires" action={<LinkButton href="#" variant="ghost">View all</LinkButton>} />
+      <SectionTitle title="Recent Enquiries" action={<LinkButton href="/dashboard/parent/enquiries" variant="ghost">View all</LinkButton>} />
       {["Neha Iyer", "Rahul Mehta", "Simran Kaur", "Amit Verma"].map((name, index) => (
         <div key={name} className="flex items-center justify-between border-b border-slate-100 py-4 last:border-0">
           <div className="flex items-center gap-4">
