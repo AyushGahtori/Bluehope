@@ -12,6 +12,7 @@ import {
   User,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { FirebaseError } from "firebase/app";
 import { signInWithPopup } from "firebase/auth";
 import { BlueHopeLogo } from "@/components/brand/logo";
 import { Badge, BlueSelect, Button, Card, Input, LinkButton } from "@/components/ui/primitives";
@@ -86,7 +87,9 @@ export function OnboardingFlow({ role }: { role: Role }) {
     const auth = getFirebaseAuth();
 
     if (!auth) {
-      setAuthMessage("Firebase is not configured on this device yet. Add .env.local values to enable Google sign-in.");
+      setAuthMessage(
+        "Firebase is not configured on this device yet. Add valid Firebase Web App values to .env.local to enable Google sign-in.",
+      );
       return;
     }
 
@@ -107,8 +110,36 @@ export function OnboardingFlow({ role }: { role: Role }) {
       }));
       setAuthMessage("Google sign-in completed.");
     } catch (error) {
+      if (error instanceof FirebaseError && error.code === "auth/api-key-not-valid") {
+        setAuthMessage(
+          "Firebase rejected this Web API key. Replace NEXT_PUBLIC_FIREBASE_API_KEY with the active key from Firebase Project settings, then restart the dev server.",
+        );
+        return;
+      }
+
+      if (error instanceof FirebaseError && error.code === "auth/unauthorized-domain") {
+        setAuthMessage("Firebase rejected localhost. Add localhost to Firebase Authentication authorized domains.");
+        return;
+      }
+
       setAuthMessage(error instanceof Error ? error.message : "Google sign-in could not be completed.");
     }
+  };
+
+  const signInWithDemoAccount = () => {
+    const signedInUser = {
+      name: "Neha Sharma",
+      email: "neha.demo@bluehope.local",
+    };
+    localStorage.setItem("bluehope.authUser", JSON.stringify({ ...signedInUser, mode: "local-demo" }));
+    setAuthUser(signedInUser);
+    setBasicInfo((current) => ({
+      ...current,
+      firstName: current.firstName || "Neha",
+      lastName: current.lastName || "Sharma",
+      email: current.email || signedInUser.email,
+    }));
+    setAuthMessage("Local demo sign-in active. Replace the Firebase key to use real Google sign-in.");
   };
 
   const validateCurrentStep = () => {
@@ -202,6 +233,7 @@ export function OnboardingFlow({ role }: { role: Role }) {
                       authUser={authUser}
                       authMessage={authMessage}
                       onGoogleSignIn={signInWithGoogle}
+                      onDemoSignIn={signInWithDemoAccount}
                       basicInfo={basicInfo}
                       onBasicInfoChange={(key, value) => {
                         setBasicInfo((current) => ({ ...current, [key]: value }));
@@ -252,6 +284,7 @@ function ParentStep({
   authUser,
   authMessage,
   onGoogleSignIn,
+  onDemoSignIn,
   basicInfo,
   onBasicInfoChange,
   fieldErrors,
@@ -267,6 +300,7 @@ function ParentStep({
   authUser: { name: string; email: string } | null;
   authMessage: string;
   onGoogleSignIn: () => void;
+  onDemoSignIn: () => void;
   basicInfo: {
     firstName: string;
     lastName: string;
@@ -283,6 +317,12 @@ function ParentStep({
   conditionsToShow: typeof conditions;
   onToggleCondition: (id: string) => void;
 }) {
+  const showDemoFallback =
+    !authUser &&
+    (authMessage.includes("rejected") ||
+      authMessage.includes("not configured") ||
+      authMessage.includes("could not be completed"));
+
   if (step === 0) {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
@@ -332,6 +372,11 @@ function ParentStep({
             </span>
             Continue with Google
           </Button>
+          {showDemoFallback ? (
+            <Button variant="secondary" className="mt-3 w-full" onClick={onDemoSignIn}>
+              Continue in local demo mode
+            </Button>
+          ) : null}
           {authUser ? (
             <motion.div
               initial={{ opacity: 0, y: 6 }}
@@ -341,7 +386,11 @@ function ParentStep({
               Signed in as {authUser.email || authUser.name}
             </motion.div>
           ) : null}
-          {authMessage && !authUser ? <p className="mt-4 text-sm font-medium text-bluehope">{authMessage}</p> : null}
+          {authMessage ? (
+            <p className={cn("mt-4 text-sm font-medium", authUser ? "text-emerald-700" : "text-bluehope")}>
+              {authMessage}
+            </p>
+          ) : null}
         </div>
       </div>
     );
