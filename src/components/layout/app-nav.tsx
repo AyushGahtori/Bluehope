@@ -4,26 +4,32 @@ import { BlueHopeLogo } from "@/components/brand/logo";
 import { LinkButton } from "@/components/ui/primitives";
 
 export function AppNav({ dashboard = false }: { dashboard?: boolean }) {
+  const homeHref = dashboard ? "/dashboard/parent" : "/dashboard/parent";
+
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-6 px-6">
-        <BlueHopeLogo className="scale-90" />
+      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-5 px-6">
+        <BlueHopeLogo href={homeHref} className="scale-90" />
         {!dashboard ? (
-          <nav className="hidden items-center gap-8 text-sm font-medium text-slate-900 lg:flex">
-            <Link href="/" className="underline underline-offset-4">
+          <nav className="hidden items-center gap-5 whitespace-nowrap text-sm font-medium text-slate-900 xl:gap-7 lg:flex">
+            <Link href="/dashboard/parent" className="underline underline-offset-4">
               HOME
             </Link>
             <Link href="/search">CATEGORIES</Link>
             <Link href="/search?q=autism">EXPLORE</Link>
-            <Link href="/dashboard/parent">RESOURCES</Link>
-            <Link href="/providers/wellvoice-speech-therapy">ABOUT US</Link>
-            <Link href="/search">CONTACT US</Link>
+            <Link href="/dashboard/parent/resources">RESOURCES</Link>
+            <Link href="/about">ABOUT US</Link>
+            <Link href="/contact">CONTACT US</Link>
           </nav>
         ) : (
-          <div className="hidden h-12 flex-1 max-w-xl items-center gap-3 rounded-lg border border-slate-300 px-4 text-sm text-slate-500 lg:flex">
+          <form action="/search" className="hidden h-12 flex-1 max-w-xl items-center gap-3 rounded-lg border border-slate-300 px-4 text-sm text-slate-500 transition focus-within:border-bluehope focus-within:ring-4 focus-within:ring-blue-100 lg:flex">
             <Search className="h-5 w-5" />
-            Search by service, therapy, condition or provider
-          </div>
+            <input
+              name="q"
+              className="min-w-0 flex-1 bg-transparent text-slate-800 outline-none placeholder:text-slate-500"
+              placeholder="Search by service, therapy, condition or provider"
+            />
+          </form>
         )}
         <div className="flex items-center gap-4">
           <LinkButton href="/search?location=near-me" variant="outline" className="hidden h-11 sm:inline-flex">

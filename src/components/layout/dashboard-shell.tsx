@@ -1,5 +1,9 @@
+"use client";
+
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   Bell,
   CalendarCheck,
@@ -95,20 +99,36 @@ export function DashboardShell({
   nav: string[];
   roleLabel: string;
 }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const homeHref = roleLabel.includes("Admin")
+    ? "/dashboard/admin"
+    : roleLabel.includes("Neha")
+      ? "/dashboard/parent"
+      : "/dashboard/provider";
+  const logout = () => {
+    localStorage.removeItem("bluehope.authUser");
+    setMenuOpen(false);
+    router.push("/");
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <aside className="fixed inset-y-0 left-0 hidden w-80 border-r border-slate-200 bg-slate-50 px-8 py-9 lg:block">
-        <BlueHopeLogo />
+        <BlueHopeLogo href={homeHref} />
         <nav className="mt-14 space-y-2">
-          {nav.map((item, index) => {
+          {nav.map((item) => {
             const Icon = iconMap[item as keyof typeof iconMap] ?? FileText;
+            const href = navHref(item, roleLabel);
+            const active = pathname === href || (href !== homeHref && pathname.startsWith(href));
             return (
               <Link
                 key={item}
-                href={navHref(item, roleLabel)}
+                href={href}
                 className={cn(
                   "flex h-14 items-center gap-4 rounded-[8px] px-5 text-base font-medium text-slate-600 transition hover:bg-blue-50 hover:text-bluehope",
-                  index === 0 && "bg-blue-50 text-bluehope",
+                  active && "bg-blue-50 text-bluehope",
                 )}
               >
                 <Icon className="h-6 w-6" />
@@ -141,10 +161,33 @@ export function DashboardShell({
               <Link href={navHref("Saved Providers", roleLabel)} aria-label="Saved providers">
                 <Heart className="h-6 w-6" />
               </Link>
-              <span className="h-12 w-12 rounded-full bg-slate-200" />
-              <div className="text-sm">
-                <p className="font-medium text-slate-800">{roleLabel}</p>
-                <p className="text-slate-500">BlueHope</p>
+              <div className="relative">
+                <button
+                  onClick={() => setMenuOpen((value) => !value)}
+                  className="flex items-center gap-3 rounded-full border border-blue-100 bg-blue-50 py-1.5 pl-2 pr-4 text-left transition hover:bg-blue-100"
+                >
+                  <span className="h-10 w-10 rounded-full bg-slate-200" />
+                  <span className="text-sm">
+                    <span className="block font-semibold text-bluehope">{roleLabel}</span>
+                    <span className="block text-slate-500">BlueHope</span>
+                  </span>
+                </button>
+                {menuOpen ? (
+                  <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-[12px] border border-blue-100 bg-white p-2 shadow-soft">
+                    <Link
+                      href={homeHref}
+                      className="block rounded-[10px] px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-blue-50"
+                    >
+                      Home
+                    </Link>
+                    <button
+                      onClick={logout}
+                      className="block w-full rounded-[10px] px-3 py-2 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50"
+                    >
+                      Log out
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

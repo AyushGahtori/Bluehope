@@ -6,13 +6,16 @@ import {
   ChevronRight,
   Check,
   FileUp,
+  LogIn,
   LocateFixed,
   Search,
   User,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { signInWithPopup } from "firebase/auth";
 import { BlueHopeLogo } from "@/components/brand/logo";
-import { Badge, Button, Card, Input, LinkButton, Select } from "@/components/ui/primitives";
+import { Badge, BlueSelect, Button, Card, Input, LinkButton } from "@/components/ui/primitives";
+import { getFirebaseAuth, googleProvider } from "@/config/firebase";
 import { conditions, services } from "@/data/taxonomy";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types/domain";
@@ -21,7 +24,7 @@ const roleCopy = {
   parent: {
     title: "Tell us who you are looking for support for",
     subtitle: "A short, calm setup that helps personalize discovery.",
-    steps: ["Support for", "Basic info", "Needs", "Location"],
+    steps: ["Support for", "Sign in", "Basic info", "Needs", "Location"],
   },
   provider: {
     title: "Set up your provider foundation",
@@ -38,6 +41,17 @@ const roleCopy = {
 export function OnboardingFlow({ role }: { role: Role }) {
   const [step, setStep] = useState(0);
   const [supportFor, setSupportFor] = useState<"myself" | "family">("family");
+  const [authUser, setAuthUser] = useState<{ name: string; email: string } | null>(null);
+  const [authMessage, setAuthMessage] = useState("");
+  const [basicInfo, setBasicInfo] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    relationship: "",
+    age: "",
+  });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [conditionQuery, setConditionQuery] = useState("");
   const [selectedConditionIds, setSelectedConditionIds] = useState<string[]>([
     "autism",
@@ -66,6 +80,61 @@ export function OnboardingFlow({ role }: { role: Role }) {
     setSelectedConditionIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
+  };
+
+  const signInWithGoogle = async () => {
+    const auth = getFirebaseAuth();
+
+    if (!auth) {
+      setAuthMessage("Firebase is not configured on this device yet. Add .env.local values to enable Google sign-in.");
+      return;
+    }
+
+    try {
+      setAuthMessage("Opening Google sign-in...");
+      const result = await signInWithPopup(auth, googleProvider);
+      const signedInUser = {
+        name: result.user.displayName ?? "BlueHope Parent",
+        email: result.user.email ?? "",
+      };
+      localStorage.setItem("bluehope.authUser", JSON.stringify(signedInUser));
+      setAuthUser(signedInUser);
+      setBasicInfo((current) => ({
+        ...current,
+        email: current.email || signedInUser.email,
+        firstName: current.firstName || signedInUser.name.split(" ")[0] || "",
+        lastName: current.lastName || signedInUser.name.split(" ").slice(1).join(" "),
+      }));
+      setAuthMessage("Google sign-in completed.");
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Google sign-in could not be completed.");
+    }
+  };
+
+  const validateCurrentStep = () => {
+    if (role === "parent" && step === 1 && !authUser) {
+      setAuthMessage("Please continue with Google before moving ahead.");
+      return false;
+    }
+
+    if (role === "parent" && step === 2) {
+      const nextErrors: Record<string, string> = {};
+      if (!basicInfo.firstName.trim()) nextErrors.firstName = "First name is required.";
+      if (!basicInfo.lastName.trim()) nextErrors.lastName = "Last name is required.";
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(basicInfo.email)) nextErrors.email = "Enter a valid email address.";
+      if (!/^[0-9+\-\s()]{8,}$/.test(basicInfo.phone)) nextErrors.phone = "Enter a valid phone number.";
+      if (supportFor === "family" && !basicInfo.relationship) nextErrors.relationship = "Select a relationship.";
+      if (supportFor === "family" && !basicInfo.age) nextErrors.age = "Age is required.";
+      setFieldErrors(nextErrors);
+      return Object.keys(nextErrors).length === 0;
+    }
+
+    return true;
+  };
+
+  const goNext = () => {
+    if (!validateCurrentStep()) return;
+    setStep((value) => Math.min(copy.steps.length - 1, value + 1));
   };
 
   return (
@@ -116,7 +185,7 @@ export function OnboardingFlow({ role }: { role: Role }) {
               />
             </div>
 
-            <div className="mt-6 min-h-0 flex-1 overflow-y-auto pr-1 lg:overflow-visible">
+            <div className="mt-6 min-h-0 flex-1 overflow-y-auto pr-2">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={`${role}-${step}`}
@@ -130,6 +199,15 @@ export function OnboardingFlow({ role }: { role: Role }) {
                       step={step}
                       supportFor={supportFor}
                       onSupportForChange={setSupportFor}
+                      authUser={authUser}
+                      authMessage={authMessage}
+                      onGoogleSignIn={signInWithGoogle}
+                      basicInfo={basicInfo}
+                      onBasicInfoChange={(key, value) => {
+                        setBasicInfo((current) => ({ ...current, [key]: value }));
+                        setFieldErrors((current) => ({ ...current, [key]: "" }));
+                      }}
+                      fieldErrors={fieldErrors}
                       conditionQuery={conditionQuery}
                       onConditionQueryChange={setConditionQuery}
                       selectedConditionIds={selectedConditionIds}
@@ -151,7 +229,7 @@ export function OnboardingFlow({ role }: { role: Role }) {
                 Back
               </Button>
               {step < copy.steps.length - 1 ? (
-                <Button onClick={() => setStep((value) => Math.min(copy.steps.length - 1, value + 1))}>
+                <Button onClick={goNext}>
                   Continue <ChevronRight className="h-4 w-4" />
                 </Button>
               ) : (
@@ -171,6 +249,12 @@ function ParentStep({
   step,
   supportFor,
   onSupportForChange,
+  authUser,
+  authMessage,
+  onGoogleSignIn,
+  basicInfo,
+  onBasicInfoChange,
+  fieldErrors,
   conditionQuery,
   onConditionQueryChange,
   selectedConditionIds,
@@ -180,6 +264,19 @@ function ParentStep({
   step: number;
   supportFor: "myself" | "family";
   onSupportForChange: (value: "myself" | "family") => void;
+  authUser: { name: string; email: string } | null;
+  authMessage: string;
+  onGoogleSignIn: () => void;
+  basicInfo: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    relationship: string;
+    age: string;
+  };
+  onBasicInfoChange: (key: keyof typeof basicInfo, value: string) => void;
+  fieldErrors: Record<string, string>;
   conditionQuery: string;
   onConditionQueryChange: (value: string) => void;
   selectedConditionIds: string[];
@@ -219,26 +316,97 @@ function ParentStep({
 
   if (step === 1) {
     return (
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Input placeholder="First name" />
-        <Input placeholder="Last name" />
-        <Input placeholder="Email address" type="email" />
-        <Input placeholder="Phone number" type="tel" />
-        <Select defaultValue="" aria-label="Relationship">
-          <option value="" disabled>
-            Select relationship
-          </option>
-          <option>Child</option>
-          <option>Sibling</option>
-          <option>Relative</option>
-          <option>Other</option>
-        </Select>
-        <Input placeholder="Age" type="number" />
+      <div className="mx-auto max-w-md py-5">
+        <div className="rounded-[16px] border border-blue-100 bg-white p-7 text-center shadow-soft">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-bluehope">
+            <LogIn className="h-7 w-7" />
+          </span>
+          <h3 className="mt-5 text-2xl font-extrabold text-slate-950">Sign in to BlueHope</h3>
+          <p className="mt-2 text-sm text-slate-600">
+            Continue with Google so your parent profile, saved providers, enquiries, and appointments stay linked to
+            your account.
+          </p>
+          <Button className="mt-6 w-full bg-white text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50" onClick={onGoogleSignIn}>
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
+              G
+            </span>
+            Continue with Google
+          </Button>
+          {authUser ? (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-4 rounded-[12px] bg-emerald-50 p-3 text-sm font-semibold text-emerald-700"
+            >
+              Signed in as {authUser.email || authUser.name}
+            </motion.div>
+          ) : null}
+          {authMessage && !authUser ? <p className="mt-4 text-sm font-medium text-bluehope">{authMessage}</p> : null}
+        </div>
       </div>
     );
   }
 
   if (step === 2) {
+    return (
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field
+          value={basicInfo.firstName}
+          onChange={(value) => onBasicInfoChange("firstName", value)}
+          placeholder="First name"
+          error={fieldErrors.firstName}
+        />
+        <Field
+          value={basicInfo.lastName}
+          onChange={(value) => onBasicInfoChange("lastName", value)}
+          placeholder="Last name"
+          error={fieldErrors.lastName}
+        />
+        <Field
+          value={basicInfo.email}
+          onChange={(value) => onBasicInfoChange("email", value)}
+          placeholder="Email address"
+          type="email"
+          error={fieldErrors.email}
+        />
+        <Field
+          value={basicInfo.phone}
+          onChange={(value) => onBasicInfoChange("phone", value)}
+          placeholder="Phone number"
+          type="tel"
+          error={fieldErrors.phone}
+        />
+        {supportFor === "family" ? (
+          <>
+            <div>
+              <BlueSelect
+                value={basicInfo.relationship}
+                onChange={(value) => onBasicInfoChange("relationship", value)}
+                placeholder="Select relationship"
+                ariaLabel="Relationship"
+                options={[
+                  { value: "child", label: "Child" },
+                  { value: "sibling", label: "Sibling" },
+                  { value: "relative", label: "Relative" },
+                  { value: "other", label: "Other" },
+                ]}
+              />
+              {fieldErrors.relationship ? <p className="mt-2 text-xs font-semibold text-rose-600">{fieldErrors.relationship}</p> : null}
+            </div>
+            <Field
+              value={basicInfo.age}
+              onChange={(value) => onBasicInfoChange("age", value)}
+              placeholder="Age"
+              type="number"
+              error={fieldErrors.age}
+            />
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (step === 3) {
     return (
       <div className="space-y-5">
         <h3 className="text-xl font-bold">What condition or support need are you looking for help with?</h3>
@@ -297,6 +465,27 @@ function ParentStep({
   return <LocationStep />;
 }
 
+function Field({
+  value,
+  onChange,
+  placeholder,
+  error,
+  type = "text",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  error?: string;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <Input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} type={type} />
+      {error ? <p className="mt-2 text-xs font-semibold text-rose-600">{error}</p> : null}
+    </label>
+  );
+}
+
 function ProviderStep({ step }: { step: number }) {
   if (step === 0) {
     return (
@@ -348,15 +537,16 @@ function InstituteStep({ step }: { step: number }) {
         <Input placeholder="Business registration information" />
         <Input placeholder="Founded year" />
         <Input placeholder="Number of locations" />
-        <Select defaultValue="" aria-label="Organization type">
-          <option value="" disabled>
-            Select organization type
-          </option>
-          <option>Therapy center</option>
-          <option>Special school</option>
-          <option>NGO</option>
-          <option>Developmental center</option>
-        </Select>
+        <BlueSelect
+          placeholder="Select organization type"
+          ariaLabel="Organization type"
+          options={[
+            { value: "therapy-center", label: "Therapy center" },
+            { value: "special-school", label: "Special school" },
+            { value: "ngo", label: "NGO" },
+            { value: "developmental-center", label: "Developmental center" },
+          ]}
+        />
       </div>
     );
   }
@@ -405,11 +595,13 @@ function CheckboxGrid({ title, items }: { title: string; items: string[] }) {
 function CredentialStep() {
   return (
     <div className="space-y-5">
-      <Select>
-        <option>Do you have a relevant degree or certification?</option>
-        <option>Yes</option>
-        <option>No</option>
-      </Select>
+      <BlueSelect
+        placeholder="Do you have a relevant degree or certification?"
+        options={[
+          { value: "yes", label: "Yes" },
+          { value: "no", label: "No" },
+        ]}
+      />
       <div className="grid gap-5 sm:grid-cols-2">
         <Input placeholder="Degree / certificate name" />
         <Input placeholder="Institution / issuing organization" />
@@ -438,11 +630,28 @@ function LocationStep({ provider = false }: { provider?: boolean }) {
 
     setStatus("loading");
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         setStatus("done");
-        setLocationText(
-          `Current location captured: ${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`,
-        );
+        const fallback = `Current location captured: ${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`;
+
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${position.coords.latitude}&lon=${position.coords.longitude}`,
+          );
+          const data = (await response.json()) as { display_name?: string; address?: Record<string, string> };
+          const address = data.address;
+          const readable = [
+            address?.suburb ?? address?.neighbourhood ?? address?.village ?? address?.town ?? address?.city,
+            address?.state,
+            address?.country,
+          ]
+            .filter(Boolean)
+            .join(", ");
+
+          setLocationText(readable ? `Current location captured: ${readable}` : data.display_name ?? fallback);
+        } catch {
+          setLocationText(fallback);
+        }
       },
       () => {
         setStatus("error");

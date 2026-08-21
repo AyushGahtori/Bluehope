@@ -1,6 +1,6 @@
 import { SlidersHorizontal } from "lucide-react";
 import { AppNav } from "@/components/layout/app-nav";
-import { Badge, Card, Input, LinkButton, Select } from "@/components/ui/primitives";
+import { Badge, BlueSelect, Card, Input, LinkButton } from "@/components/ui/primitives";
 import { conditions, services } from "@/data/taxonomy";
 import { searchProviders, type SearchParams } from "@/services/search-service";
 import { MapPreview } from "./map-preview";
@@ -30,46 +30,59 @@ export function SearchResultsPage({ params }: { params: SearchParams }) {
           <div className="space-y-5 text-sm">
             <label className="block">
               <span className="font-semibold">Distance</span>
-              <Select name="radius" defaultValue={String(params.radius ?? 10)} className="mt-2">
-                {[1, 5, 10, 20, 50, 100].map((radius) => (
-                  <option key={radius} value={radius}>
-                    Within {radius} km
-                  </option>
-                ))}
-              </Select>
+              <BlueSelect
+                name="radius"
+                defaultValue={String(params.radius ?? 10)}
+                placeholder="Choose distance"
+                className="mt-2"
+                options={[1, 5, 10, 20, 50, 100].map((radius) => ({
+                  value: String(radius),
+                  label: `Within ${radius} km`,
+                }))}
+              />
             </label>
             <label className="block">
               <span className="font-semibold">Service Type</span>
-              <Select name="service" defaultValue={params.service ?? ""} className="mt-2">
-                <option value="">Any service</option>
-                {services.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name}
-                  </option>
-                ))}
-              </Select>
+              <BlueSelect
+                name="service"
+                defaultValue={params.service ?? ""}
+                placeholder="Any service"
+                className="mt-2"
+                options={[
+                  { value: "", label: "Any service" },
+                  ...services.map((service) => ({ value: service.id, label: service.name })),
+                ]}
+              />
             </label>
             <label className="block">
               <span className="font-semibold">Condition</span>
-              <Select name="condition" defaultValue={params.condition ?? ""} className="mt-2">
-                <option value="">Any condition</option>
-                {conditions.map((condition) => (
-                  <option key={condition.id} value={condition.id}>
-                    {condition.name}
-                  </option>
-                ))}
-              </Select>
+              <BlueSelect
+                name="condition"
+                defaultValue={params.condition ?? ""}
+                placeholder="Any condition"
+                className="mt-2"
+                options={[
+                  { value: "", label: "Any condition" },
+                  ...conditions.map((condition) => ({ value: condition.id, label: condition.name })),
+                ]}
+              />
             </label>
             <label className="block">
               <span className="font-semibold">Sort</span>
-              <Select name="sort" defaultValue={params.sort ?? "most-relevant"} className="mt-2">
-                <option value="most-relevant">Most Relevant</option>
-                <option value="nearest">Nearest</option>
-                <option value="highest-rated">Highest Rated</option>
-                <option value="most-experienced">Most Experienced</option>
-              </Select>
+              <BlueSelect
+                name="sort"
+                defaultValue={params.sort ?? "most-relevant"}
+                placeholder="Sort results"
+                className="mt-2"
+                options={[
+                  { value: "most-relevant", label: "Most Relevant" },
+                  { value: "nearest", label: "Nearest" },
+                  { value: "highest-rated", label: "Highest Rated" },
+                  { value: "most-experienced", label: "Most Experienced" },
+                ]}
+              />
             </label>
-            <button className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-bluehope text-sm font-semibold text-bluehope">
+            <button type="button" className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-bluehope text-sm font-semibold text-bluehope transition hover:-translate-y-0.5 hover:bg-blue-50 active:translate-y-0 active:scale-[0.98]">
               More Filters <SlidersHorizontal className="h-4 w-4" />
             </button>
           </div>

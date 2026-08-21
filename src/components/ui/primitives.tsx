@@ -1,5 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type ButtonProps = ComponentPropsWithoutRef<"button"> & {
@@ -82,6 +87,120 @@ export function Select({ className, ...props }: ComponentPropsWithoutRef<"select
         {...props}
       />
       <span className="pointer-events-none absolute right-4 top-1/2 h-2 w-2 -translate-y-1/2 rotate-45 border-b-2 border-r-2 border-slate-500" />
+    </div>
+  );
+}
+
+export type SelectOption = {
+  value: string;
+  label: string;
+  description?: string;
+};
+
+export function BlueSelect({
+  name,
+  value,
+  defaultValue = "",
+  placeholder,
+  options,
+  onChange,
+  className,
+  ariaLabel,
+}: {
+  name?: string;
+  value?: string;
+  defaultValue?: string;
+  placeholder: string;
+  options: SelectOption[];
+  onChange?: (value: string) => void;
+  className?: string;
+  ariaLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [internalValue, setInternalValue] = useState(defaultValue);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selectedValue = value ?? internalValue;
+  const selectedOption = useMemo(
+    () => options.find((option) => option.value === selectedValue),
+    [options, selectedValue],
+  );
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  const choose = (nextValue: string) => {
+    setInternalValue(nextValue);
+    onChange?.(nextValue);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={rootRef} className={cn("relative", className)}>
+      {name ? <input type="hidden" name={name} value={selectedValue} /> : null}
+      <button
+        type="button"
+        aria-label={ariaLabel ?? placeholder}
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "group flex h-12 w-full items-center justify-between rounded-[12px] border border-slate-300 bg-white px-4 text-left text-sm font-semibold text-slate-800 shadow-sm transition hover:border-blue-200 focus:border-bluehope focus:outline-none focus:ring-4 focus:ring-blue-100",
+          open && "border-bluehope ring-4 ring-blue-100",
+        )}
+      >
+        <span className={selectedOption ? "text-slate-900" : "text-slate-400"}>
+          {selectedOption?.label ?? placeholder}
+        </span>
+        <ChevronDown className={cn("h-4 w-4 text-slate-500 transition", open && "rotate-180 text-bluehope")} />
+      </button>
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 8, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="absolute left-0 right-0 top-full z-50 max-h-72 overflow-auto rounded-[12px] border border-blue-100 bg-white p-1.5 shadow-soft"
+          >
+            {options.map((option) => {
+              const selected = option.value === selectedValue;
+              return (
+                <motion.button
+                  key={option.value}
+                  type="button"
+                  whileHover="hover"
+                  onClick={() => choose(option.value)}
+                  className={cn(
+                    "relative flex w-full items-center justify-between overflow-hidden rounded-[10px] px-3 py-3 text-left text-sm transition",
+                    selected ? "text-bluehope" : "text-slate-700",
+                  )}
+                >
+                  <motion.span
+                    variants={{
+                      hover: { opacity: 1, x: "0%" },
+                    }}
+                    initial={{ opacity: selected ? 1 : 0, x: "-18%" }}
+                    animate={{ opacity: selected ? 1 : 0, x: "0%" }}
+                    className="absolute inset-0 bg-gradient-to-r from-blue-100 via-blue-50 to-transparent"
+                  />
+                  <span className="relative">
+                    <span className="block font-semibold">{option.label}</span>
+                    {option.description ? (
+                      <span className="mt-0.5 block text-xs text-slate-500">{option.description}</span>
+                    ) : null}
+                  </span>
+                  {selected ? <Check className="relative h-4 w-4" /> : null}
+                </motion.button>
+              );
+            })}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarCheck, Heart, MessageSquare, X } from "lucide-react";
 import { useState } from "react";
-import { Button, Card, Input, Select } from "@/components/ui/primitives";
+import { BlueSelect, Button, Card, Input } from "@/components/ui/primitives";
 
 type ActionMode = "contact" | "enquiry" | "booking" | null;
 
@@ -52,14 +52,14 @@ export function ProfileActions({ providerName }: { providerName: string }) {
                 {mode === "booking" ? (
                   <>
                     <Input type="date" />
-                    <Select defaultValue="">
-                      <option value="" disabled>
-                        Select time slot
-                      </option>
-                      <option>10:00 AM - 11:00 AM</option>
-                      <option>02:00 PM - 03:00 PM</option>
-                      <option>05:00 PM - 06:00 PM</option>
-                    </Select>
+                    <BlueSelect
+                      placeholder="Select time slot"
+                      options={[
+                        { value: "10", label: "10:00 AM - 11:00 AM" },
+                        { value: "14", label: "02:00 PM - 03:00 PM" },
+                        { value: "17", label: "05:00 PM - 06:00 PM" },
+                      ]}
+                    />
                   </>
                 ) : null}
                 <textarea
