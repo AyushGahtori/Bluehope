@@ -1,8 +1,22 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
 import { Eye, PlusCircle, Star, Users, CheckCircle2, HeartPulse } from "lucide-react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Badge, Card, LinkButton, SectionTitle } from "@/components/ui/primitives";
-import { demoAppointments } from "@/data/demo";
+import { demoAppointments, demoEnquiries } from "@/data/demo";
+import { CommunityPreferences } from "@/features/dashboard/community-preferences";
+import { UserGreeting } from "@/features/dashboard/user-greeting";
+import {
+  RecentEnquiriesCard,
+  ReviewsSummaryCard,
+  UpcomingAppointmentsCard,
+} from "@/features/dashboard/dashboard-data-cards";
+import { EmptyProfileState, ProfilePreview } from "@/features/dashboard/profile-preview";
+import { authedApiHeaders, isConfigurationPendingResponse } from "@/lib/api-client";
+import { useStoredAuthUser } from "@/lib/auth-user-store";
+import { cn } from "@/lib/utils";
 
 const parentNav = [
   "Dashboard",
@@ -20,14 +34,27 @@ const parentNav = [
 const providerNav = [
   "Dashboard",
   "My Profile",
-  "Services",
+  "Explore",
+  "Inquiries",
   "Appointments",
-  "Enquiries",
   "Reviews & Ratings",
   "Messages",
-  "Gallery",
-  "Availability",
-  "Profile Settings",
+  "Q&A",
+  "Edit Profile",
+  "Verify",
+];
+
+const instituteNav = [
+  "Dashboard",
+  "My Profile",
+  "Explore",
+  "Inquiries",
+  "Appointments",
+  "Reviews & Ratings",
+  "Messages",
+  "Q&A",
+  "Edit Profile",
+  "Verify",
 ];
 
 const adminNav = [
@@ -43,20 +70,221 @@ const adminNav = [
   "Settings",
 ];
 
+type ProfileData = {
+  name: string;
+  tagline: string;
+  bio: string;
+  images: string[];
+  services: string[];
+  conditions: string[];
+  weeklyHours: Record<string, { open: string; close: string } | null>;
+  location: { text: string; source: string | null } | null;
+  profileCompleteness: number;
+  missingItems: string[];
+};
+
+/**
+ * Loads the signed-in provider/institute's OWN profile (ownerUid-scoped,
+ * resolved from the verified Firebase ID token server-side). Never reads
+ * another account's data and never falls back to demo records.
+ */
+function useOwnProfile() {
+  const [state, setState] = useState<"loading" | "ready">("loading");
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+
+  const load = useCallback(async () => {
+    const headers = await authedApiHeaders();
+    setState("loading");
+    if (!headers) {
+      setProfile(null);
+      setState("ready");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/provider-profile", { headers, cache: "no-store" });
+      const body: unknown = await response.json().catch(() => null);
+      if (response.ok && body && typeof body === "object") {
+        const data = body as { profile?: ProfileData | null };
+        setProfile(data.profile ?? null);
+      } else if (isConfigurationPendingResponse(response.status, body)) {
+        setProfile(null);
+      }
+    } catch {
+      setProfile(null);
+    }
+    setState("ready");
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return { state, profile };
+}
+
+const DAY_LABELS: Record<string, string> = {
+  mon: "Monday",
+  tue: "Tuesday",
+  wed: "Wednesday",
+  thu: "Thursday",
+  fri: "Friday",
+  sat: "Saturday",
+  sun: "Sunday",
+};
+
+function todayHoursLabel(profile: ProfileData | null) {
+  if (!profile) return undefined;
+  const dayKey = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date().getDay()];
+  const entry = profile.weeklyHours?.[dayKey];
+  return entry ? `${DAY_LABELS[dayKey]} ${entry.open}–${entry.close}` : undefined;
+}
+
+/**
+ * Shared provider/institute dashboard body. Every section is account-scoped:
+ * the profile preview reflects the caller's own Firestore profile, and the
+ * enquiry/appointment cards load the caller's own records. Demo data appears
+ * only in explicit demo (guest) sessions.
+ */
+function ProviderDashboardBody({
+  role,
+  fallbackName,
+  editHref,
+  verifyHref,
+  enquiriesHref,
+  appointmentsHref,
+  reviewsHref,
+}: {
+  role: "provider" | "institution";
+  fallbackName: string;
+  editHref: string;
+  verifyHref: string;
+  enquiriesHref: string;
+  appointmentsHref: string;
+  reviewsHref: string;
+}) {
+  const authUser = useStoredAuthUser();
+  const { state, profile } = useOwnProfile();
+
+  const complete = Boolean(profile && profile.profileCompleteness >= 100);
+  const displayName = profile?.name || authUser?.name || fallbackName;
+
+  return (
+    <>
+      <h1 className="text-3xl font-extrabold text-slate-950">Your Profile</h1>
+      <p className="mt-2 text-slate-600">
+        This is how families see {role === "institution" ? "your organization" : "you"} on BlueHope. Keep it complete
+        and current.
+      </p>
+      <div className="mt-6 space-y-6">
+        {state === "loading" ? (
+          <div className="h-72 animate-pulse rounded-[8px] bg-slate-100" aria-busy="true" />
+        ) : complete && profile ? (
+          <ProfilePreview
+            data={{
+              name: displayName,
+              tagline: profile.tagline || (role === "institution" ? "Child development center" : "Independent provider"),
+              bio: profile.bio || undefined,
+              images: profile.images,
+              services: profile.services,
+              conditions: profile.conditions,
+              openingHoursToday: todayHoursLabel(profile),
+              location: profile.location?.text || undefined,
+              verificationStatus: "notRequested",
+              completionPercent: profile.profileCompleteness,
+              missingItems: [],
+              editHref,
+            }}
+          />
+        ) : (
+          <EmptyProfileState
+            title="Your profile is not complete yet"
+            description={
+              role === "institution"
+                ? "Complete your profile so families can understand what your organization offers."
+                : "Complete your profile so families can understand your expertise, services, and availability."
+            }
+            editHref={editHref}
+          />
+        )}
+        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.9fr_0.75fr]">
+          <RecentEnquiriesCard viewAllHref={enquiriesHref} demoEnquiries={demoEnquiries} />
+          <UpcomingAppointmentsCard
+            viewAllHref={appointmentsHref}
+            demoAppointments={demoAppointments.map((appointment, index) => ({
+              id: `demo-appointment-${index}`,
+              date: "",
+              time: appointment.time,
+              serviceId: appointment.service,
+              status: "confirmed",
+            }))}
+          />
+          <ProfileStatus missingItems={profile?.missingItems ?? []} verifyHref={verifyHref} />
+        </div>
+        <ReviewsSummaryCard viewAllHref={reviewsHref} />
+      </div>
+    </>
+  );
+}
+
+export function ProviderDashboard() {
+  return (
+    <DashboardShell nav={providerNav} roleLabel="Dr. Priya Sharma" role="provider">
+      <ProviderDashboardBody
+        role="provider"
+        fallbackName="Your Practice"
+        editHref="/dashboard/provider/edit-profile"
+        verifyHref="/dashboard/provider/verify"
+        enquiriesHref="/dashboard/provider/enquiries"
+        appointmentsHref="/dashboard/provider/appointments"
+        reviewsHref="/dashboard/provider/reviews"
+      />
+    </DashboardShell>
+  );
+}
+
+export function InstituteDashboard() {
+  return (
+    <DashboardShell nav={instituteNav} roleLabel="Institute User" role="institution">
+      <ProviderDashboardBody
+        role="institution"
+        fallbackName="Your Organization"
+        editHref="/dashboard/institute/edit-profile"
+        verifyHref="/dashboard/institute/verify"
+        enquiriesHref="/dashboard/institute/enquiries"
+        appointmentsHref="/dashboard/institute/appointments"
+        reviewsHref="/dashboard/institute/reviews"
+      />
+    </DashboardShell>
+  );
+}
+
 export function ParentDashboard() {
   return (
-    <DashboardShell nav={parentNav} roleLabel="Hi, Neha">
+    <DashboardShell nav={parentNav} roleLabel="Hi, Neha" role="parent">
       <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
         <Card className="bg-soft-blue p-8">
-          <h1 className="text-4xl font-extrabold text-slate-950">Welcome back, Neha!</h1>
+          <UserGreeting fallback="Welcome back!" />
           <p className="mt-4 max-w-xl text-lg text-slate-600">
-            We are here to help you find the right support for your child&apos;s unique needs.
+            We are here to help you find the right support for your child and their unique needs.
           </p>
-          <form action="/search" className="mt-6 flex gap-3 rounded-[8px] bg-white p-2">
-            <input name="q" className="min-w-0 flex-1 px-4 outline-none" placeholder="What are you looking for today?" />
-            <input type="hidden" name="radius" value="20" />
-            <button className="rounded-lg bg-bluehope px-8 font-semibold text-white">Search</button>
-          </form>
+          <div className="mt-7 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-[8px] bg-white p-4">
+              <p className="text-sm font-semibold text-slate-500">Active child context</p>
+              <p className="mt-1 text-lg font-bold text-slate-950">Aarav · Speech support</p>
+            </div>
+            <div className="rounded-[8px] bg-white p-4">
+              <p className="text-sm font-semibold text-slate-500">Recommended next step</p>
+              <p className="mt-1 text-lg font-bold text-slate-950">Compare 6 nearby therapists</p>
+            </div>
+            <div className="rounded-[8px] bg-white p-4">
+              <p className="text-sm font-semibold text-slate-500">Marketplace loop</p>
+              <p className="mt-1 text-lg font-bold text-slate-950">Contact · Book · Review</p>
+            </div>
+          </div>
+          <LinkButton href="/search" className="mt-6" variant="outline">
+            Search support
+          </LinkButton>
         </Card>
         <Card className="p-6">
           <SectionTitle title="Your Children" action={<LinkButton href="#" variant="ghost">View all</LinkButton>} />
@@ -72,45 +300,27 @@ export function ParentDashboard() {
       </div>
       <QuickAccess />
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <AppointmentCard />
+        <UpcomingAppointmentsCard
+          viewAllHref="/dashboard/parent/appointments"
+          demoAppointments={demoAppointments.map((appointment, index) => ({
+            id: `demo-appointment-${index}`,
+            date: "",
+            time: appointment.time,
+            serviceId: appointment.service,
+            status: "confirmed",
+          }))}
+        />
         <Card className="p-6">
-          <SectionTitle title="Parents Community" action={<LinkButton href="#" variant="ghost">View all</LinkButton>} />
+          <SectionTitle title="Parent Community" action={<Badge tone="neutral">Optional</Badge>} />
           <div className="rounded-[8px] bg-soft-blue p-5">
-            <p className="text-lg font-bold text-bluehope">Community Visibility</p>
-            <p className="mt-2 text-sm text-slate-600">Share your profile with parents in your area when you are ready.</p>
+            <p className="text-lg font-bold text-bluehope">Connect with parents who understand a similar journey.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Community matching is a future moderated feature. These preferences only tell BlueHope what you would
+              like to hear about when it is ready.
+            </p>
           </div>
-          <ul className="mt-6 space-y-3 text-slate-800">
-            {["Join Local Parent Communities", "Connect with families facing similar challenges", "Receive invitations to nearby support groups"].map((item, index) => (
-              <li key={item} className="flex gap-3">
-                <span className={index < 2 ? "h-5 w-5 rounded bg-bluehope" : "h-5 w-5 rounded border border-slate-400"} />
-                {item}
-              </li>
-            ))}
-          </ul>
+          <CommunityPreferences />
         </Card>
-      </div>
-    </DashboardShell>
-  );
-}
-
-export function ProviderDashboard() {
-  return (
-    <DashboardShell nav={providerNav} roleLabel="Dr. Priya Sharma">
-      <h1 className="text-3xl font-extrabold text-slate-950">Welcome back, Dr. Priya Sharma!</h1>
-      <p className="mt-2 text-slate-600">Here is what is happening with your practice today.</p>
-      <MetricGrid
-        items={[
-          ["Total Enquires", "48", Users],
-          ["Responded", "28", CheckCircle2],
-          ["Appointments", "16", HeartPulse],
-          ["Average Rating", "4.8", Star],
-          ["Profile Views", "320", Eye],
-        ]}
-      />
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.9fr_0.75fr]">
-        <EnquiryCard />
-        <AppointmentCard />
-        <ProfileStatus />
       </div>
     </DashboardShell>
   );
@@ -118,7 +328,7 @@ export function ProviderDashboard() {
 
 export function AdminDashboard() {
   return (
-    <DashboardShell nav={adminNav} roleLabel="Admin User">
+    <DashboardShell nav={adminNav} roleLabel="Admin User" role="admin">
       <h1 className="text-3xl font-extrabold text-slate-950">Welcome back, Admin!</h1>
       <p className="mt-2 text-slate-600">Here is what is happening across BlueHope.</p>
       <MetricGrid
@@ -132,10 +342,10 @@ export function AdminDashboard() {
       />
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.95fr_0.65fr]">
         <Card className="p-6">
-      <SectionTitle title="Enquiries Overview" action={<Badge tone="neutral">Last 7 days</Badge>} />
+          <SectionTitle title="Enquiries Overview" action={<Badge tone="neutral">Last 7 days</Badge>} />
           <div className="h-72 rounded-[8px] bg-[linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[length:100%_48px]" />
         </Card>
-        <EnquiryCard />
+        <AdminEnquiryCard />
         <Card className="p-6">
           <SectionTitle title="User registration" action={<LinkButton href="#" variant="ghost">View all</LinkButton>} />
           <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-full border-[18px] border-bluehope text-center">
@@ -163,15 +373,15 @@ function QuickAccess() {
           ["Doctor", "Find services and providers", "bg-amber-50 text-amber-600", "/search?service=psychological-services&radius=20"],
         ].map(([title, text, tone, href]) => (
           <Link key={title} href={href} className="block transition hover:-translate-y-0.5">
-          <Card className="flex items-center gap-5 p-6">
-            <span className={`flex h-20 w-20 items-center justify-center rounded-[8px] ${tone}`}>
-              <PlusCircle className="h-9 w-9" />
-            </span>
-            <div>
-              <p className="text-xl font-bold">{title}</p>
-              <p className="text-sm text-slate-600">{text}</p>
-            </div>
-          </Card>
+            <Card className="flex items-center gap-5 p-6">
+              <span className={`flex h-20 w-20 items-center justify-center rounded-[8px] ${tone}`}>
+                <PlusCircle className="h-9 w-9" />
+              </span>
+              <div>
+                <p className="text-xl font-bold">{title}</p>
+                <p className="text-sm text-slate-600">{text}</p>
+              </div>
+            </Card>
           </Link>
         ))}
       </div>
@@ -198,40 +408,18 @@ function MetricGrid({ items }: { items: Array<[string, string, typeof Users]> })
   );
 }
 
-function AppointmentCard() {
+/** Admin-only overview card (mock console data, not user-facing dashboards). */
+function AdminEnquiryCard() {
   return (
     <Card className="p-6">
-      <SectionTitle title="Upcoming Appointments" action={<LinkButton href="#" variant="ghost">View all</LinkButton>} />
-      <div className="space-y-4">
-        {demoAppointments.map((appointment) => (
-          <div key={`${appointment.date}-${appointment.name}`} className="flex items-center justify-between rounded-[8px] border border-slate-100 p-4">
-            <div className="flex items-center gap-4">
-              <span className="rounded-[8px] bg-slate-100 px-4 py-3 text-center font-bold">{appointment.date}</span>
-              <div>
-                <p className="font-bold">{appointment.name}</p>
-                <p className="text-sm text-slate-600">{appointment.service}</p>
-                <p className="text-sm text-slate-600">{appointment.time}</p>
-              </div>
-            </div>
-            <Badge tone="green">Confirmed</Badge>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-function EnquiryCard() {
-  return (
-    <Card className="p-6">
-      <SectionTitle title="Recent Enquiries" action={<LinkButton href="/dashboard/parent/enquiries" variant="ghost">View all</LinkButton>} />
-      {["Neha Iyer", "Rahul Mehta", "Simran Kaur", "Amit Verma"].map((name, index) => (
-        <div key={name} className="flex items-center justify-between border-b border-slate-100 py-4 last:border-0">
+      <SectionTitle title="Recent Enquiries" action={<LinkButton href="/dashboard/admin/enquiries" variant="ghost">View all</LinkButton>} />
+      {demoEnquiries.map((enquiry, index) => (
+        <div key={enquiry.id} className="flex items-center justify-between border-b border-slate-100 py-4 last:border-0">
           <div className="flex items-center gap-4">
             <span className="h-12 w-12 rounded-full bg-purple-100" />
             <div>
-              <p className="font-bold">{name}</p>
-              <p className="text-sm text-slate-600">Speech Delay · 4 years old · Mumbai</p>
+              <p className="font-bold">{enquiry.parentName}</p>
+              <p className="text-sm text-slate-600">{enquiry.message}</p>
             </div>
           </div>
           <Badge tone={index === 0 ? "amber" : "green"}>{index === 0 ? "New" : "Requested"}</Badge>
@@ -241,24 +429,39 @@ function EnquiryCard() {
   );
 }
 
-function ProfileStatus() {
+/**
+ * Next-steps card derived from the account's real profile completion. The
+ * incomplete-profile warning disappears once every required section is done,
+ * while Edit Profile remains permanently available in the sidebar.
+ */
+function ProfileStatus({ missingItems, verifyHref }: { missingItems: string[]; verifyHref: string }) {
   return (
     <Card className="p-6">
-      <SectionTitle title="Profile Status" action={<Badge tone="green">Review ready</Badge>} />
-      <div className="mx-auto h-24 w-24 rounded-full bg-slate-100" />
-      <p className="mt-6 text-center font-bold">Your profile is 90% complete</p>
-      <div className="mt-4 h-2 rounded-full bg-slate-100">
-        <div className="h-2 w-[90%] rounded-full bg-bluehope" />
-      </div>
-      <div className="mt-6 space-y-3 text-sm text-slate-600">
-        {["Basic Information", "Services Offered", "Work Experience", "Documents Uploaded"].map((item) => (
-          <p key={item} className="flex items-center gap-2">
+      <SectionTitle title="Next Steps" action={<Badge tone="amber">Not Verified</Badge>} />
+      <div className="space-y-3 text-sm text-slate-600">
+        {missingItems.length === 0 ? (
+          <p className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-            {item}
+            Your profile is complete. Keep it updated any time via Edit Profile.
           </p>
-        ))}
+        ) : (
+          <>
+            {missingItems.map((item) => (
+              <p key={item} className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-slate-300" />
+                Add your {item.toLowerCase()}
+              </p>
+            ))}
+            <p className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-slate-300" />
+              Verification (coming next)
+            </p>
+          </>
+        )}
       </div>
-      <LinkButton href="/onboarding/provider" className="mt-6 w-full">Edit Profile</LinkButton>
+      <LinkButton href={verifyHref} variant="outline" className={cn("mt-6 w-full")}>
+        Verification status
+      </LinkButton>
     </Card>
   );
 }

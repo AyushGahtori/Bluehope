@@ -1,0 +1,4 @@
+PASS: Web API key is valid (server responded as expected for a dummy token).
+PASS: Admin SDK authenticated. Auth service reachable (1 user(s) sampled).
+PASS: Firestore reachable (write at 2026-08-24T08:00:39.003Z).
+ALL CHECKS PASSED

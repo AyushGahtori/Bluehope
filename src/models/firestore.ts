@@ -13,6 +13,7 @@ export const COLLECTIONS = {
   listings: "listings",
   searchListings: "searchListings",
   recommendationFeatures: "recommendationFeatures",
+  availabilitySlots: "availabilitySlots",
   reviews: "reviews",
   reviewReports: "reviewReports",
   conversations: "conversations",
@@ -36,6 +37,10 @@ export type AccountRole =
   | "staff"
   | "moderator"
   | "admin";
+
+/** Roles a self-serve account can be established with (one per Firebase UID). */
+export const ACCOUNT_ROLES = ["customer", "soleProvider", "institution"] as const;
+export type SelfServeAccountRole = (typeof ACCOUNT_ROLES)[number];
 
 export type AccountStatus = "active" | "pending" | "suspended" | "deleted";
 export type ListingType = "soleProvider" | "institution";
@@ -309,6 +314,112 @@ export type BookingDocument = {
   notes?: string;
   createdAt: TimestampLike;
   updatedAt: TimestampLike;
+};
+
+export type AvailabilitySlotDocument = {
+  slotId: string;
+  ownerUid: string;
+  listingId: string;
+  date: string; // ISO yyyy-mm-dd in listing timezone
+  startsAt: TimestampLike;
+  endsAt: TimestampLike;
+  capacity: number;
+  bookedCount: number;
+  blocked: boolean;
+  mode: "clinic" | "online" | "homeVisit";
+  createdAt: TimestampLike;
+  updatedAt: TimestampLike;
+};
+
+export type ReviewReplyDocument = {
+  replyId: string;
+  reviewId: string;
+  authorUid: string;
+  authorRole: AccountRole;
+  text: string;
+  mediaIds: string[];
+  moderationState: ModerationState;
+  helpfulCount: number;
+  reportCount: number;
+  createdAt: TimestampLike;
+  updatedAt: TimestampLike;
+};
+
+export type EnquiryDocument = {
+  enquiryId: string;
+  customerUid: string;
+  childId?: string;
+  listingId: string;
+  providerUid?: string;
+  institutionId?: string;
+  serviceId?: string;
+  message: string;
+  status:
+    | "open"
+    | "responded"
+    | "accepted"
+    | "declined"
+    | "converted"
+    | "closed";
+  responseMessage?: string;
+  respondedAt?: TimestampLike;
+  fraudFlags: string[];
+  createdAt: TimestampLike;
+  updatedAt: TimestampLike;
+};
+
+export type SavedProviderDocument = {
+  savedId: string;
+  customerUid: string;
+  listingId: string;
+  childIds: string[];
+  note?: string;
+  createdAt: TimestampLike;
+};
+
+export type ConversationDocument = {
+  conversationId: string;
+  participantUids: string[];
+  relatedEntityType?: "enquiry" | "booking" | "listing";
+  relatedEntityId?: string;
+  lastMessagePreview?: string;
+  lastMessageAt?: TimestampLike;
+  lastSenderUid?: string;
+  unreadCounts: Record<string, number>;
+  moderationFlags: string[];
+  createdAt: TimestampLike;
+  updatedAt: TimestampLike;
+};
+
+export type MessageDocument = {
+  messageId: string;
+  senderUid: string;
+  text?: string;
+  attachmentMediaIds: string[];
+  readBy: string[];
+  moderationState: ModerationState;
+  systemGenerated: boolean;
+  createdAt: TimestampLike;
+};
+
+export type NotificationDocument = {
+  notificationId: string;
+  recipientUid: string;
+  type:
+    | "enquiry"
+    | "booking"
+    | "message"
+    | "review"
+    | "reply"
+    | "verification"
+    | "system";
+  title: string;
+  body?: string;
+  relatedEntityCollection?: FirestoreCollection;
+  relatedEntityId?: string;
+  read: boolean;
+  expiresAt?: TimestampLike;
+  createdAt: TimestampLike;
 };
 
 export type AuditLogDocument = {

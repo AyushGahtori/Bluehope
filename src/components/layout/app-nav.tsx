@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { Bell, Heart, MapPin, MessageSquare, Search } from "lucide-react";
+import { Bell, Heart, MapPin, MessageSquare, Search, UserRound } from "lucide-react";
 import { BlueHopeLogo } from "@/components/brand/logo";
 import { LinkButton } from "@/components/ui/primitives";
 
 export function AppNav({ dashboard = false }: { dashboard?: boolean }) {
-  const homeHref = dashboard ? "/dashboard/parent" : "/dashboard/parent";
+  const homeHref = "/dashboard/parent";
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -12,9 +12,7 @@ export function AppNav({ dashboard = false }: { dashboard?: boolean }) {
         <BlueHopeLogo href={homeHref} className="scale-90" />
         {!dashboard ? (
           <nav className="hidden items-center gap-5 whitespace-nowrap text-sm font-medium text-slate-900 xl:gap-7 lg:flex">
-            <Link href="/dashboard/parent" className="underline underline-offset-4">
-              HOME
-            </Link>
+            <Link href="/dashboard/parent">HOME</Link>
             <Link href="/search">CATEGORIES</Link>
             <Link href="/search?q=autism">EXPLORE</Link>
             <Link href="/dashboard/parent/resources">RESOURCES</Link>
@@ -36,10 +34,24 @@ export function AppNav({ dashboard = false }: { dashboard?: boolean }) {
             <MapPin className="h-4 w-4" />
             Near Me
           </LinkButton>
-          <MessageSquare className="hidden h-6 w-6 text-slate-800 sm:block" />
-          <Heart className="hidden h-6 w-6 text-slate-800 sm:block" />
-          {dashboard ? <Bell className="hidden h-6 w-6 text-slate-800 sm:block" /> : null}
-          <span className="hidden h-12 w-12 rounded-full bg-slate-200 sm:block" />
+          <Link href="/dashboard/parent/messages" aria-label="Messages" className="hidden text-slate-800 transition hover:text-bluehope sm:block">
+            <MessageSquare className="h-6 w-6" />
+          </Link>
+          <Link href="/dashboard/parent/saved" aria-label="Saved providers" className="hidden text-slate-800 transition hover:text-bluehope sm:block">
+            <Heart className="h-6 w-6" />
+          </Link>
+          {dashboard ? (
+            <Link href="/dashboard/parent/notifications" aria-label="Notifications" className="hidden text-slate-800 transition hover:text-bluehope sm:block">
+              <Bell className="h-6 w-6" />
+            </Link>
+          ) : null}
+          <Link
+            href="/dashboard/parent/settings"
+            aria-label="Profile settings"
+            className="hidden h-12 w-12 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-600 transition hover:bg-blue-100 hover:text-bluehope sm:flex"
+          >
+            <UserRound className="h-5 w-5" />
+          </Link>
           {!dashboard ? (
             <>
               <LinkButton href="/dashboard/parent" variant="outline" className="hidden h-11 sm:inline-flex">

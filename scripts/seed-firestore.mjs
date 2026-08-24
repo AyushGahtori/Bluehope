@@ -1,5 +1,12 @@
+import { readFileSync } from "node:fs";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, GeoPoint, getFirestore } from "firebase-admin/firestore";
+
+// Minimal .env.local loader (same approach as verify-firebase.mjs).
+for (const line of readFileSync(".env.local", "utf8").split(String.fromCharCode(10))) {
+  const match = line.match(/^([A-Z_]+)=(.*)$/);
+  if (match) process.env[match[1]] ??= match[2].replace(/^"|"$/g, "");
+}
 
 const required = [
   "FIREBASE_ADMIN_PROJECT_ID",
@@ -214,8 +221,111 @@ await setMany(
   ]),
 );
 
+// Structured support-need subcategories under each condition (parent-friendly).
+const conditionSubcategories = [
+  ["autism-spectrum-disorder", [
+    ["autism-communication", "Communication support"],
+    ["autism-social-interaction", "Social interaction"],
+    ["autism-sensory", "Sensory needs"],
+    ["autism-behaviour", "Behaviour support"],
+    ["autism-learning", "Learning support"],
+    ["autism-emotional-regulation", "Emotional regulation"],
+  ]],
+  ["adhd", [
+    ["adhd-attention", "Attention and focus"],
+    ["adhd-impulsivity", "Impulse control"],
+    ["adhd-hyperactivity", "Hyperactivity"],
+    ["adhd-executive-function", "Executive function"],
+  ]],
+  ["speech-language-delay", [
+    ["speech-expressive", "Expressive language"],
+    ["speech-receptive", "Receptive language"],
+    ["speech-articulation", "Articulation and clarity"],
+    ["speech-vocabulary", "Vocabulary building"],
+  ]],
+  ["learning-disabilities", [
+    ["learning-reading", "Reading support"],
+    ["learning-writing", "Writing support"],
+    ["learning-math", "Math support"],
+    ["learning-memory", "Memory and retention"],
+  ]],
+  ["sensory-processing", [
+    ["sensory-over-responsiveness", "Over-responsiveness"],
+    ["sensory-under-responsiveness", "Under-responsiveness"],
+    ["sensory-seeking", "Sensory seeking"],
+    ["sensory-motor-planning", "Motor planning"],
+  ]],
+];
+
+await setMany(
+  "conditionSubcategories",
+  conditionSubcategories.flatMap(([conditionId, subs], conditionIndex) =>
+    subs.map(([id, label], sortOrder) => [
+      id,
+      {
+        id,
+        conditionId,
+        slug: id,
+        label,
+        parentFriendlyLabel: label,
+        category: conditions.find(([cid]) => cid === conditionId)?.[1] ?? "developmental_support",
+        aliases: [],
+        active: true,
+        sortOrder: conditionIndex * 100 + sortOrder,
+        demo: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]),
+  ),
+);
+
 const listings = Array.from({ length: 50 }, (_, index) => listingFor(index));
 await setMany("listings", listings.map((listing) => [listing.listingId, listing]));
 await setMany("searchListings", listings.map((listing) => [listing.listingId, listing]));
 
-console.log(`Seeded ${conditions.length} conditions, ${services.length} services, and ${listings.length} demo Delhi listings.`);
+// Demo availability slots for the first 10 listings over the next 7 days.
+function isoDatePlus(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+const availabilitySlots = [];
+for (let listingIndex = 0; listingIndex < 10; listingIndex += 1) {
+  const listing = listings[listingIndex];
+  for (let dayOffset = 1; dayOffset <= 7; dayOffset += 1) {
+    for (let hour = 10; hour <= 16; hour += 2) {
+      const date = isoDatePlus(dayOffset);
+      const startsAt = new Date(`${date}T${String(hour).padStart(2, "0")}:00:00+05:30`);
+      const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
+      const slotId = `${listing.listingId}-${date}-${hour}`;
+      availabilitySlots.push([
+        slotId,
+        {
+          slotId,
+          ownerUid: listing.ownerUid,
+          listingId: listing.listingId,
+          date,
+          startsAt,
+          endsAt,
+          capacity: 1,
+          bookedCount: 0,
+          blocked: false,
+          mode: listing.availabilityFlags.online && hour % 4 === 0 ? "online" : "clinic",
+          demo: true,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]);
+    }
+  }
+}
+await setMany("availabilitySlots", availabilitySlots);
+
+console.log(
+  `Seeded ${conditions.length} conditions, ` +
+  `${conditionSubcategories.reduce((total, [, subs]) => total + subs.length, 0)} condition subcategories, ` +
+  `${services.length} services, ${listings.length} demo Delhi listings, and ` +
+  `${availabilitySlots.length} availability slots.`,
+);

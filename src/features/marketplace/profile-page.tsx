@@ -1,14 +1,15 @@
 import { Calendar, Clock, Heart, Languages, MapPin, Star } from "lucide-react";
 import { AppNav } from "@/components/layout/app-nav";
-import { Badge, Card, SectionTitle } from "@/components/ui/primitives";
-import { conditions, services } from "@/data/taxonomy";
+import { Badge, Card } from "@/components/ui/primitives";
+import { services } from "@/data/taxonomy";
+import { openingSummary } from "@/data/marketplace";
 import { formatDistance } from "@/lib/utils";
 import type { ProviderSummary } from "@/types/domain";
-import { MapPreview } from "./map-preview";
+import { LazyMapPreview } from "./lazy-map-preview";
 import { ProfileActions } from "./profile-actions";
+import { ProfileTabs } from "./profile-tabs";
 
 const serviceNames = new Map(services.map((service) => [service.id, service.name]));
-const conditionNames = new Map(conditions.map((condition) => [condition.id, condition.name]));
 
 export function ProfilePage({ profile }: { profile: ProviderSummary }) {
   return (
@@ -62,33 +63,11 @@ export function ProfilePage({ profile }: { profile: ProviderSummary }) {
             <p className="mt-8 max-w-4xl text-lg leading-8 text-slate-600">{profile.description}</p>
           </Card>
 
-          <div className="mt-10 grid grid-cols-4 border-b border-slate-200 text-sm font-semibold text-slate-600">
-            {["About", "Reviews", "Gallery", "Q&A"].map((tab, index) => (
-              <div key={tab} className={index === 0 ? "border-b-2 border-bluehope py-4 text-bluehope" : "py-4"}>
-                {tab}
-              </div>
-            ))}
-          </div>
-
-          <Card className="mt-6 p-7">
-            <SectionTitle title={`About the ${profile.providerType === "institute" ? "Institute" : "Provider"}`} />
-            <p className="text-slate-600">
-              {profile.name} works with families through structured, parent-friendly plans. Public profile data is
-              intentionally limited to professional and business information; private child and identity records stay
-              protected.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {profile.conditions.map((id) => (
-                <Badge key={id} tone="blue">
-                  {conditionNames.get(id) ?? id}
-                </Badge>
-              ))}
-            </div>
-          </Card>
+          <ProfileTabs profile={profile} />
         </section>
 
         <aside className="space-y-6" id="contact">
-          <ProfileActions providerName={profile.name} />
+          <ProfileActions profile={profile} />
           <Card className="p-5">
             <div className="flex items-center gap-3">
               <span className="rounded-md border border-slate-200 p-3">
@@ -97,10 +76,10 @@ export function ProfilePage({ profile }: { profile: ProviderSummary }) {
               <p className="font-semibold text-slate-700">Usually responds within 2-4 hours</p>
             </div>
             <div className="mt-5 border-t border-slate-200 pt-5 font-bold text-emerald-600">
-              Open today: 9:00 AM - 7:00 PM
+              {openingSummary("2026-09-22")}
             </div>
           </Card>
-          <MapPreview />
+          <LazyMapPreview />
         </aside>
       </main>
     </div>

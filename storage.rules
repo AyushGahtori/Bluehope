@@ -93,11 +93,21 @@ service firebase.storage {
         && under(8 * 1024 * 1024);
     }
 
-    match /reviews/{reviewId}/media/{fileName} {
-      allow read: if false;
+    // Customers stage review images under their own private path first. The
+    // backend validates them, attaches them to a review, and moves/approves
+    // them into /reviews/{reviewId}/media/ via the Admin SDK.
+    match /users/{uid}/review-media/{fileName} {
+      allow read: if signedIn() && (request.auth.uid == uid || isModerator());
       allow write: if signedIn()
+        && request.auth.uid == uid
         && isImage()
         && under(6 * 1024 * 1024);
+    }
+
+    // Review media is never publicly readable and never client-writable.
+    // Approved variants are served through backend-generated access.
+    match /reviews/{reviewId}/media/{fileName} {
+      allow read, write: if false;
     }
 
     match /documents/{ownerId}/{allPaths=**} {

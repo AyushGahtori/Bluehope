@@ -1,18 +1,47 @@
-import { FileText } from "lucide-react";
+import Link from "next/link";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { Card, LinkButton, SectionTitle } from "@/components/ui/primitives";
+import { Card } from "@/components/ui/primitives";
+import { ProviderAvailabilityManager } from "@/features/dashboard/provider-availability-manager";
+import {
+  ProviderAppointmentsSection,
+  ProviderEnquiriesSection,
+  ProviderMessagesSection,
+  ProviderReviewsSection,
+} from "@/features/dashboard/provider-inbox-sections";
+import {
+  EditProfileSection,
+  QaSection,
+  VerifyPlaceholder,
+} from "@/features/dashboard/provider-profile-sections";
+import {
+  ExploreSection,
+  MyProfileSection,
+} from "@/features/dashboard/profile-and-explore-sections";
 
 const providerNav = [
   "Dashboard",
   "My Profile",
-  "Services",
+  "Explore",
+  "Inquiries",
   "Appointments",
-  "Enquiries",
   "Reviews & Ratings",
   "Messages",
-  "Gallery",
-  "Availability",
-  "Profile Settings",
+  "Q&A",
+  "Edit Profile",
+  "Verify",
+];
+
+const instituteNav = [
+  "Dashboard",
+  "My Profile",
+  "Explore",
+  "Inquiries",
+  "Appointments",
+  "Reviews & Ratings",
+  "Messages",
+  "Q&A",
+  "Edit Profile",
+  "Verify",
 ];
 
 const adminNav = [
@@ -28,45 +57,57 @@ const adminNav = [
   "Settings",
 ];
 
-function titleFromSection(section: string) {
-  return section
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 export function GenericDashboardSectionPage({
   section,
   role,
 }: {
   section: string;
-  role: "provider" | "admin";
+  role: "provider" | "institution" | "admin";
 }) {
-  const title = titleFromSection(section);
+  const nav = role === "provider" ? providerNav : role === "institution" ? instituteNav : adminNav;
+  const roleLabel =
+    role === "provider" ? "Dr. Priya Sharma" : role === "institution" ? "Institute User" : "Admin User";
+  const homeHref =
+    role === "provider"
+      ? "/dashboard/provider"
+      : role === "institution"
+        ? "/dashboard/institute"
+        : "/dashboard/admin";
+  const editHref = role === "institution" ? "/dashboard/institute/edit-profile" : "/dashboard/provider/edit-profile";
+
+  const providerSections: Record<string, React.ReactNode> = {
+    availability: <ProviderAvailabilityManager />,
+    messages: <ProviderMessagesSection />,
+    enquiries: <ProviderEnquiriesSection />,
+    appointments: <ProviderAppointmentsSection />,
+    reviews: <ProviderReviewsSection />,
+    qa: <QaSection />,
+    "edit-profile": <EditProfileSection ownerType={role === "institution" ? "institution" : "provider"} />,
+    verify: <VerifyPlaceholder />,
+    profile: <MyProfileSection role={role === "institution" ? "institution" : "provider"} editHref={editHref} />,
+    explore: <ExploreSection />,
+  };
+
+  const content = providerSections[section] ?? (
+    // Unknown section: a clean user-facing page — never developer notes.
+    <Card className="p-8 text-center">
+      <h1 className="text-2xl font-extrabold text-slate-950">This section is coming soon</h1>
+      <p className="mx-auto mt-2 max-w-md text-slate-600">
+        We are still building this part of BlueHope. Everything else in your dashboard keeps
+        working as usual.
+      </p>
+      <Link
+        href={homeHref}
+        className="mt-5 inline-block rounded-[8px] bg-bluehope px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700"
+      >
+        Back to dashboard
+      </Link>
+    </Card>
+  );
 
   return (
-    <DashboardShell
-      nav={role === "provider" ? providerNav : adminNav}
-      roleLabel={role === "provider" ? "Dr. Priya Sharma" : "Admin User"}
-    >
-      <div className="mb-6 flex items-center gap-4">
-        <span className="rounded-[8px] bg-blue-50 p-4 text-bluehope">
-          <FileText className="h-7 w-7" />
-        </span>
-        <div>
-          <h1 className="text-3xl font-extrabold text-slate-950">{title}</h1>
-          <p className="mt-1 text-slate-600">Foundation workspace for this BlueHope section.</p>
-        </div>
-      </div>
-      <Card className="p-6">
-        <SectionTitle title={`${title} foundation`} />
-        <p className="text-slate-600">
-          This section is wired into navigation and ready for the next detailed implementation pass.
-        </p>
-        <LinkButton href={role === "provider" ? "/dashboard/provider" : "/dashboard/admin"} className="mt-5">
-          Back to dashboard
-        </LinkButton>
-      </Card>
+    <DashboardShell nav={nav} roleLabel={roleLabel} role={role}>
+      {content}
     </DashboardShell>
   );
 }

@@ -93,7 +93,7 @@ export function RoleOnboarding() {
               <LinkButton href={selectedRole.href}>
                 Continue <ChevronRight className="h-4 w-4" />
               </LinkButton>
-              <LinkButton href="/search?q=speech%20therapy&location=Andheri%20West" variant="outline">
+              <LinkButton href="/dashboard/parent" variant="outline">
                 Explore demo
               </LinkButton>
             </div>

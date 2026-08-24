@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -12,11 +13,18 @@ import {
   User,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FirebaseError } from "firebase/app";
-import { signInWithPopup } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { BlueHopeLogo } from "@/components/brand/logo";
-import { Badge, BlueSelect, Button, Card, Input, LinkButton } from "@/components/ui/primitives";
-import { getFirebaseAuth, googleProvider } from "@/config/firebase";
+import { Badge, BlueSelect, Button, Card, Input } from "@/components/ui/primitives";
+import { getFirebaseAuth, getFirebaseWebKeyIssue, googleProvider } from "@/config/firebase";
+import {
+  isParentOnboardingComplete,
+  isParentOnboardingCompleteSync,
+  saveParentOnboarding,
+} from "@/lib/parent-onboarding";
+import { signInWithGoogleAndEstablishRole } from "@/lib/auth-service";
+import { RoleConflictScreen } from "@/features/onboarding/role-conflict-screen";
+import type { SelfServeAccountRole } from "@/models/firestore";
 import { conditions, services } from "@/data/taxonomy";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/types/domain";
@@ -30,20 +38,30 @@ const roleCopy = {
   provider: {
     title: "Set up your provider foundation",
     subtitle: "Families can discover your services once your profile is ready.",
-    steps: ["Basic info", "Services", "Credentials", "Location"],
+    steps: ["Basic info", "Sign in", "Services", "Credentials", "Opening hours", "Location"],
   },
   institute: {
     title: "Set up your institute profile",
     subtitle: "List your organization, services, and future branch structure.",
-    steps: ["Organization", "Business", "Services", "Locations"],
+    steps: ["Organization", "Sign in", "Business", "Services", "Opening hours", "Locations"],
   },
 } satisfies Record<Role, { title: string; subtitle: string; steps: string[] }>;
 
 export function OnboardingFlow({ role }: { role: Role }) {
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [supportFor, setSupportFor] = useState<"myself" | "family">("family");
-  const [authUser, setAuthUser] = useState<{ name: string; email: string } | null>(null);
+  const [authUser, setAuthUser] = useState<{ uid: string; name: string; email: string } | null>(null);
   const [authMessage, setAuthMessage] = useState("");
+  const [locationText, setLocationText] = useState("");
+  const [locationMeta, setLocationMeta] = useState<{
+    source: "browser_geolocation" | "manual" | null;
+    capturedAt: string | null;
+  }>({ source: null, capturedAt: null });
+  const [saving, setSaving] = useState(false);
+  const [checkingAccount, setCheckingAccount] = useState(false);
+  const [roleConflict, setRoleConflict] = useState<SelfServeAccountRole | null>(null);
+  const [saveStatus, setSaveStatus] = useState("");
   const [basicInfo, setBasicInfo] = useState({
     firstName: "",
     lastName: "",
@@ -61,6 +79,69 @@ export function OnboardingFlow({ role }: { role: Role }) {
   ]);
   const copy = roleCopy[role];
   const progress = ((step + 1) / copy.steps.length) * 100;
+
+  // Returning users who already completed onboarding go straight to the dashboard.
+  useEffect(() => {
+    if (role !== "parent") return;
+
+    // Fast path: a completed onboarding remembered on this device redirects
+    // immediately, without waiting for Firebase to initialize.
+    try {
+      const raw = window.localStorage.getItem("bluehope.authUser");
+      const stored = raw ? (JSON.parse(raw) as { uid?: string }) : null;
+      if (stored?.uid && isParentOnboardingCompleteSync(stored.uid)) {
+        router.replace("/dashboard/parent");
+        return;
+      }
+    } catch {
+      // Ignore malformed storage and fall through to the auth listener.
+    }
+
+    const auth = getFirebaseAuth();
+    if (!auth) return;
+
+    let cancelled = false;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user || cancelled) return;
+
+      window.localStorage.setItem(
+        "bluehope.authUser",
+        JSON.stringify({
+          uid: user.uid,
+          name: user.displayName ?? "",
+          email: user.email ?? "",
+          photoURL: user.photoURL ?? "",
+        }),
+      );
+      setAuthUser({ uid: user.uid, name: user.displayName ?? "", email: user.email ?? "" });
+
+      const completed = await isParentOnboardingComplete(user.uid);
+      if (!cancelled && completed) {
+        router.replace("/dashboard/parent");
+        return;
+      }
+
+      // Signed in but onboarding not finished: resume at the details step
+      // instead of repeating the intro and sign-in steps.
+      if (!cancelled) {
+        setStep((current) => (current < 2 ? 2 : current));
+        setBasicInfo((current) => ({
+          ...current,
+          email: current.email || user.email || "",
+          firstName: current.firstName || (user.displayName ?? "").split(" ")[0] || "",
+          lastName:
+            current.lastName ||
+            (user.displayName ?? "").split(" ").slice(1).join(" "),
+        }));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [role, router]);
+
   const filteredConditions = useMemo(() => {
     const query = conditionQuery.trim().toLowerCase();
     const pool = role === "parent" ? conditions : conditions.slice(0, 14);
@@ -83,67 +164,76 @@ export function OnboardingFlow({ role }: { role: Role }) {
     );
   };
 
+  const accountRoleFor: Record<Role, SelfServeAccountRole> = {
+    parent: "customer",
+    provider: "soleProvider",
+    institute: "institution",
+  };
+
   const signInWithGoogle = async () => {
-    const auth = getFirebaseAuth();
-
-    if (!auth) {
-      setAuthMessage(
-        "Firebase is not configured on this device yet. Add valid Firebase Web App values to .env.local to enable Google sign-in.",
-      );
-      return;
-    }
-
     try {
-      setAuthMessage("Opening Google sign-in...");
-      const result = await signInWithPopup(auth, googleProvider);
-      const signedInUser = {
-        name: result.user.displayName ?? "BlueHope Parent",
-        email: result.user.email ?? "",
-      };
-      localStorage.setItem("bluehope.authUser", JSON.stringify(signedInUser));
-      setAuthUser(signedInUser);
-      setBasicInfo((current) => ({
-        ...current,
-        email: current.email || signedInUser.email,
-        firstName: current.firstName || signedInUser.name.split(" ")[0] || "",
-        lastName: current.lastName || signedInUser.name.split(" ").slice(1).join(" "),
-      }));
-      setAuthMessage("Google sign-in completed.");
-    } catch (error) {
-      if (error instanceof FirebaseError && error.code === "auth/api-key-not-valid") {
+      const keyIssue = await getFirebaseWebKeyIssue();
+      if (keyIssue) {
+        setAuthMessage(keyIssue);
+        return;
+      }
+
+      const auth = getFirebaseAuth();
+
+      if (!auth) {
         setAuthMessage(
-          "Firebase rejected this Web API key. Replace NEXT_PUBLIC_FIREBASE_API_KEY with the active key from Firebase Project settings, then restart the dev server.",
+          "Firebase is not configured on this device yet. Add valid Firebase Web App values to .env.local to enable Google sign-in.",
         );
         return;
       }
 
-      if (error instanceof FirebaseError && error.code === "auth/unauthorized-domain") {
-        setAuthMessage("Firebase rejected localhost. Add localhost to Firebase Authentication authorized domains.");
+      setAuthMessage("Opening Google sign-in...");
+      const outcome = await signInWithGoogleAndEstablishRole(accountRoleFor[role]);
+
+      if (outcome.kind === "conflict") {
+        setRoleConflict(outcome.existingRole);
+        setAuthMessage("");
         return;
       }
 
-      setAuthMessage(error instanceof Error ? error.message : "Google sign-in could not be completed.");
+      if (outcome.kind === "error") {
+        setAuthMessage(outcome.message);
+        return;
+      }
+
+      setAuthUser({
+        uid: outcome.uid,
+        name: outcome.displayName ?? "BlueHope member",
+        email: outcome.email ?? "",
+      });
+      setRoleConflict(null);
+
+      // Existing parents skip the questionnaire and land on their dashboard.
+      setAuthMessage("Checking your account...");
+      setCheckingAccount(true);
+      try {
+        if (role === "parent" && (await isParentOnboardingComplete(outcome.uid))) {
+          router.replace("/dashboard/parent");
+          return;
+        }
+      } finally {
+        setCheckingAccount(false);
+      }
+
+      setBasicInfo((current) => ({
+        ...current,
+        email: current.email || outcome.email || "",
+        firstName: current.firstName || (outcome.displayName ?? "").split(" ")[0] || "",
+        lastName: current.lastName || (outcome.displayName ?? "").split(" ").slice(1).join(" "),
+      }));
+      setAuthMessage("Google sign-in completed.");
+    } catch {
+      setAuthMessage("We couldn't complete Google sign-in right now. Please try again.");
     }
   };
 
-  const signInWithDemoAccount = () => {
-    const signedInUser = {
-      name: "Neha Sharma",
-      email: "neha.demo@bluehope.local",
-    };
-    localStorage.setItem("bluehope.authUser", JSON.stringify({ ...signedInUser, mode: "local-demo" }));
-    setAuthUser(signedInUser);
-    setBasicInfo((current) => ({
-      ...current,
-      firstName: current.firstName || "Neha",
-      lastName: current.lastName || "Sharma",
-      email: current.email || signedInUser.email,
-    }));
-    setAuthMessage("Local demo sign-in active. Replace the Firebase key to use real Google sign-in.");
-  };
-
   const validateCurrentStep = () => {
-    if (role === "parent" && step === 1 && !authUser) {
+    if (step === 1 && !authUser) {
       setAuthMessage("Please continue with Google before moving ahead.");
       return false;
     }
@@ -166,6 +256,45 @@ export function OnboardingFlow({ role }: { role: Role }) {
   const goNext = () => {
     if (!validateCurrentStep()) return;
     setStep((value) => Math.min(copy.steps.length - 1, value + 1));
+  };
+
+  const finishOnboarding = async () => {
+    if (role === "parent") {
+      setSaving(true);
+      setSaveStatus("");
+      try {
+        const user = getFirebaseAuth()?.currentUser;
+        if (user) {
+          const result = await saveParentOnboarding(user.uid, {
+            supportFor,
+            firstName: basicInfo.firstName,
+            lastName: basicInfo.lastName,
+            email: basicInfo.email,
+            phone: basicInfo.phone,
+            relationship: basicInfo.relationship,
+            age: basicInfo.age,
+            conditionIds: selectedConditionIds,
+            locationText,
+            locationSource: locationMeta.source,
+            locationCapturedAt: locationMeta.capturedAt,
+          });
+          setSaveStatus(
+            result === "saved"
+              ? "Your details were saved to your account."
+              : "Saved on this device. Cloud sync activates once Firestore is enabled for the project.",
+          );
+        }
+      } finally {
+        setSaving(false);
+      }
+    }
+    router.push(
+      role === "parent"
+        ? "/dashboard/parent"
+        : role === "provider"
+          ? "/dashboard/provider"
+          : "/dashboard/institute",
+    );
   };
 
   return (
@@ -225,7 +354,9 @@ export function OnboardingFlow({ role }: { role: Role }) {
                   exit={{ opacity: 0, x: -18 }}
                   transition={{ duration: 0.22, ease: "easeOut" }}
                 >
-                  {role === "parent" ? (
+                  {roleConflict ? (
+                    <RoleConflictScreen existingRole={roleConflict} />
+                  ) : role === "parent" ? (
                     <ParentStep
                       step={step}
                       supportFor={supportFor}
@@ -233,7 +364,6 @@ export function OnboardingFlow({ role }: { role: Role }) {
                       authUser={authUser}
                       authMessage={authMessage}
                       onGoogleSignIn={signInWithGoogle}
-                      onDemoSignIn={signInWithDemoAccount}
                       basicInfo={basicInfo}
                       onBasicInfoChange={(key, value) => {
                         setBasicInfo((current) => ({ ...current, [key]: value }));
@@ -245,31 +375,53 @@ export function OnboardingFlow({ role }: { role: Role }) {
                       selectedConditionIds={selectedConditionIds}
                       conditionsToShow={filteredConditions}
                       onToggleCondition={toggleCondition}
+                      locationText={locationText}
+                      onLocationTextChange={setLocationText}
+                      onLocationMetaChange={setLocationMeta}
                     />
                   ) : role === "provider" ? (
-                    <ProviderStep step={step} />
+                    <ProviderStep
+                      step={step}
+                      authUser={authUser}
+                      authMessage={authMessage}
+                      onGoogleSignIn={signInWithGoogle}
+                    />
                   ) : (
-                    <InstituteStep step={step} />
+                    <InstituteStep
+                      step={step}
+                      authUser={authUser}
+                      authMessage={authMessage}
+                      onGoogleSignIn={signInWithGoogle}
+                    />
                   )}
                 </motion.div>
               </AnimatePresence>
             </div>
 
             <div className="mt-5 flex flex-wrap justify-between gap-3">
-              <Button variant="outline" disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>
+              <Button
+                variant="outline"
+                disabled={step === 0 || checkingAccount || saving}
+                onClick={() => setStep((value) => Math.max(0, value - 1))}
+              >
                 <ChevronLeft className="h-4 w-4" />
                 Back
               </Button>
               {step < copy.steps.length - 1 ? (
-                <Button onClick={goNext}>
-                  Continue <ChevronRight className="h-4 w-4" />
+                <Button onClick={goNext} disabled={checkingAccount || saving || Boolean(roleConflict)}>
+                  {checkingAccount ? "Checking..." : "Continue"}
+                  {!checkingAccount ? <ChevronRight className="h-4 w-4" /> : null}
                 </Button>
               ) : (
-                <LinkButton href={role === "parent" ? "/dashboard/parent" : role === "provider" ? "/dashboard/provider" : "/dashboard/admin"}>
-                  Go to BlueHope
-                </LinkButton>
+                <Button onClick={finishOnboarding} disabled={saving}>
+                  {saving ? "Saving..." : "Go to BlueHope"}
+                  {!saving ? <ChevronRight className="h-4 w-4" /> : null}
+                </Button>
               )}
             </div>
+            {saveStatus ? (
+              <p className="mt-2 text-center text-xs font-medium text-slate-500">{saveStatus}</p>
+            ) : null}
           </Card>
         </section>
       </div>
@@ -284,7 +436,6 @@ function ParentStep({
   authUser,
   authMessage,
   onGoogleSignIn,
-  onDemoSignIn,
   basicInfo,
   onBasicInfoChange,
   fieldErrors,
@@ -293,14 +444,16 @@ function ParentStep({
   selectedConditionIds,
   conditionsToShow,
   onToggleCondition,
+  locationText,
+  onLocationTextChange,
+  onLocationMetaChange,
 }: {
   step: number;
   supportFor: "myself" | "family";
   onSupportForChange: (value: "myself" | "family") => void;
-  authUser: { name: string; email: string } | null;
+  authUser: { uid: string; name: string; email: string } | null;
   authMessage: string;
   onGoogleSignIn: () => void;
-  onDemoSignIn: () => void;
   basicInfo: {
     firstName: string;
     lastName: string;
@@ -316,13 +469,13 @@ function ParentStep({
   selectedConditionIds: string[];
   conditionsToShow: typeof conditions;
   onToggleCondition: (id: string) => void;
+  locationText: string;
+  onLocationTextChange: (value: string) => void;
+  onLocationMetaChange?: (meta: {
+    source: "browser_geolocation" | "manual" | null;
+    capturedAt: string | null;
+  }) => void;
 }) {
-  const showDemoFallback =
-    !authUser &&
-    (authMessage.includes("rejected") ||
-      authMessage.includes("not configured") ||
-      authMessage.includes("could not be completed"));
-
   if (step === 0) {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
@@ -355,45 +508,7 @@ function ParentStep({
   }
 
   if (step === 1) {
-    return (
-      <div className="mx-auto max-w-md py-5">
-        <div className="rounded-[16px] border border-blue-100 bg-white p-7 text-center shadow-soft">
-          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-bluehope">
-            <LogIn className="h-7 w-7" />
-          </span>
-          <h3 className="mt-5 text-2xl font-extrabold text-slate-950">Sign in to BlueHope</h3>
-          <p className="mt-2 text-sm text-slate-600">
-            Continue with Google so your parent profile, saved providers, enquiries, and appointments stay linked to
-            your account.
-          </p>
-          <Button className="mt-6 w-full bg-white text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50" onClick={onGoogleSignIn}>
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
-              G
-            </span>
-            Continue with Google
-          </Button>
-          {showDemoFallback ? (
-            <Button variant="secondary" className="mt-3 w-full" onClick={onDemoSignIn}>
-              Continue in local demo mode
-            </Button>
-          ) : null}
-          {authUser ? (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-4 rounded-[12px] bg-emerald-50 p-3 text-sm font-semibold text-emerald-700"
-            >
-              Signed in as {authUser.email || authUser.name}
-            </motion.div>
-          ) : null}
-          {authMessage ? (
-            <p className={cn("mt-4 text-sm font-medium", authUser ? "text-emerald-700" : "text-bluehope")}>
-              {authMessage}
-            </p>
-          ) : null}
-        </div>
-      </div>
-    );
+    return <SignInCard authUser={authUser} authMessage={authMessage} onGoogleSignIn={onGoogleSignIn} />;
   }
 
   if (step === 2) {
@@ -511,7 +626,58 @@ function ParentStep({
     );
   }
 
-  return <LocationStep />;
+  return (
+    <LocationStep
+      locationText={locationText}
+      onLocationTextChange={onLocationTextChange}
+      onLocationMetaChange={onLocationMetaChange}
+    />
+  );
+}
+
+function SignInCard({
+  authUser,
+  authMessage,
+  onGoogleSignIn,
+}: {
+  authUser: { uid: string; name: string; email: string } | null;
+  authMessage: string;
+  onGoogleSignIn: () => void;
+}) {
+  return (
+    <div className="mx-auto max-w-md py-5">
+      <div className="rounded-[16px] border border-blue-100 bg-white p-7 text-center shadow-soft">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-bluehope">
+          <LogIn className="h-7 w-7" />
+        </span>
+        <h3 className="mt-5 text-2xl font-extrabold text-slate-950">Sign in to BlueHope</h3>
+        <p className="mt-2 text-sm text-slate-600">
+          Continue with Google to securely connect this account to BlueHope. Your profile, enquiries, and appointments
+          stay linked to one identity.
+        </p>
+        <Button className="mt-6 w-full bg-white text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50" onClick={onGoogleSignIn}>
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
+            G
+          </span>
+          Continue with Google
+        </Button>
+        {authUser ? (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 rounded-[12px] bg-emerald-50 p-3 text-sm font-semibold text-emerald-700"
+          >
+            Signed in as {authUser.email || authUser.name}
+          </motion.div>
+        ) : null}
+        {authMessage ? (
+          <p className={cn("mt-4 text-sm font-medium", authUser ? "text-emerald-700" : "text-bluehope")}>
+            {authMessage}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function Field({
@@ -535,7 +701,17 @@ function Field({
   );
 }
 
-function ProviderStep({ step }: { step: number }) {
+function ProviderStep({
+  step,
+  authUser,
+  authMessage,
+  onGoogleSignIn,
+}: {
+  step: number;
+  authUser: { uid: string; name: string; email: string } | null;
+  authMessage: string;
+  onGoogleSignIn: () => void;
+}) {
   if (step === 0) {
     return (
       <div className="grid gap-5 sm:grid-cols-2">
@@ -550,6 +726,10 @@ function ProviderStep({ step }: { step: number }) {
   }
 
   if (step === 1) {
+    return <SignInCard authUser={authUser} authMessage={authMessage} onGoogleSignIn={onGoogleSignIn} />;
+  }
+
+  if (step === 2) {
     return (
       <div className="grid gap-6 lg:grid-cols-2">
         <CheckboxGrid title="Services provided" items={services.map((service) => service.name)} />
@@ -558,14 +738,28 @@ function ProviderStep({ step }: { step: number }) {
     );
   }
 
-  if (step === 2) {
+  if (step === 3) {
     return <CredentialStep />;
+  }
+
+  if (step === 4) {
+    return <OpeningHoursStep />;
   }
 
   return <LocationStep provider />;
 }
 
-function InstituteStep({ step }: { step: number }) {
+function InstituteStep({
+  step,
+  authUser,
+  authMessage,
+  onGoogleSignIn,
+}: {
+  step: number;
+  authUser: { uid: string; name: string; email: string } | null;
+  authMessage: string;
+  onGoogleSignIn: () => void;
+}) {
   if (step === 0) {
     return (
       <div className="grid gap-5 sm:grid-cols-2">
@@ -580,6 +774,10 @@ function InstituteStep({ step }: { step: number }) {
   }
 
   if (step === 1) {
+    return <SignInCard authUser={authUser} authMessage={authMessage} onGoogleSignIn={onGoogleSignIn} />;
+  }
+
+  if (step === 2) {
     return (
       <div className="grid gap-5 sm:grid-cols-2">
         <Input placeholder="GST number" />
@@ -600,11 +798,68 @@ function InstituteStep({ step }: { step: number }) {
     );
   }
 
-  if (step === 2) {
+  if (step === 3) {
     return <CheckboxGrid title="Institute services" items={services.map((service) => service.name)} />;
   }
 
+  if (step === 4) {
+    return <OpeningHoursStep />;
+  }
+
   return <LocationStep provider />;
+}
+
+function OpeningHoursStep() {
+  const days = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
+  const [closedDays, setClosedDays] = useState<string[]>(["Wednesday", "Sunday"]);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-xl font-bold">Set weekly opening hours</h3>
+        <p className="mt-2 text-sm text-slate-600">
+          These are operating hours. Appointment slots are managed separately from the dashboard.
+        </p>
+      </div>
+      <div className="grid gap-3">
+        {days.map((day) => {
+          const closed = closedDays.includes(day);
+          return (
+            <div key={day} className="grid gap-3 rounded-[12px] border border-slate-200 p-4 sm:grid-cols-[140px_1fr_auto] sm:items-center">
+              <p className="font-bold text-slate-950">{day}</p>
+              {closed ? (
+                <p className="rounded-[8px] bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-500">Closed</p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Input type="time" defaultValue="09:00" aria-label={`${day} opening time`} />
+                  <Input type="time" defaultValue="18:00" aria-label={`${day} closing time`} />
+                </div>
+              )}
+              <Button
+                variant="outline"
+                className="h-10"
+                onClick={() =>
+                  setClosedDays((current) =>
+                    current.includes(day) ? current.filter((item) => item !== day) : [...current, day],
+                  )
+                }
+              >
+                {closed ? "Mark open" : "Mark closed"}
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function CheckboxGrid({ title, items }: { title: string; items: string[] }) {
@@ -666,21 +921,78 @@ function CredentialStep() {
   );
 }
 
-function LocationStep({ provider = false }: { provider?: boolean }) {
+function LocationStep({
+  provider = false,
+  locationText,
+  onLocationTextChange,
+  onLocationMetaChange,
+}: {
+  provider?: boolean;
+  locationText?: string;
+  onLocationTextChange?: (value: string) => void;
+  onLocationMetaChange?: (meta: {
+    source: "browser_geolocation" | "manual" | null;
+    capturedAt: string | null;
+  }) => void;
+}) {
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [locationText, setLocationText] = useState("");
+  const [permissionHint, setPermissionHint] = useState("");
+
+  const [manualArea, setManualArea] = useState("");
+
+  // Edge (and other Chromium browsers) may have geolocation permanently
+  // denied from an earlier visit, in which case getCurrentPosition fails
+  // silently or never shows a prompt. Detect the permission state up front
+  // so the user gets clear guidance instead of a frozen screen.
+  useEffect(() => {
+    let ignore = false;
+    try {
+      if (typeof navigator !== "undefined" && navigator.permissions?.query) {
+        navigator.permissions
+          .query({ name: "geolocation" as PermissionName })
+          .then((permission) => {
+            if (ignore) return;
+            if (permission.state === "denied") {
+              setPermissionHint(
+                "Location access is blocked for this site in your browser settings. Enable it in the site permissions (padlock icon), then try again — or enter your area manually below.",
+              );
+              setStatus("error");
+            }
+          })
+          .catch(() => undefined);
+      }
+    } catch {
+      // Permissions API unavailable: fall through to the regular flow.
+    }
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const requestLocation = () => {
+    if (window.isSecureContext === false) {
+      setStatus("error");
+      onLocationTextChange?.(
+        "Location requires a secure connection. Open BlueHope over HTTPS or localhost, or enter your area manually below.",
+      );
+      return;
+    }
+
     if (!navigator.geolocation) {
       setStatus("error");
-      setLocationText("Location is not available in this browser.");
+      onLocationTextChange?.("Location is not available in this browser. Enter your area manually below.");
       return;
     }
 
     setStatus("loading");
+    onLocationTextChange?.("Getting your location…");
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         setStatus("done");
+        onLocationMetaChange?.({
+          source: "browser_geolocation",
+          capturedAt: new Date().toISOString(),
+        });
         const fallback = `Current location captured: ${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`;
 
         try {
@@ -697,16 +1009,23 @@ function LocationStep({ provider = false }: { provider?: boolean }) {
             .filter(Boolean)
             .join(", ");
 
-          setLocationText(readable ? `Current location captured: ${readable}` : data.display_name ?? fallback);
+          onLocationTextChange?.(readable ? `Current location captured: ${readable}` : data.display_name ?? fallback);
         } catch {
-          setLocationText(fallback);
+          onLocationTextChange?.(fallback);
         }
       },
-      () => {
+      (error) => {
         setStatus("error");
-        setLocationText("Location permission was not granted. You can try again.");
+        const reason =
+          error.code === 1
+            ? "We couldn't access your location — permission was denied. Allow access in your browser site settings, then try again, or enter your area manually."
+            : error.code === 3
+              ? "We couldn't access your location — it took too long. Please try again or enter your area manually."
+              : "We couldn't access your location. Please try again, or enter your area manually.";
+        onLocationTextChange?.(reason);
       },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+      // Explicit timeout: Edge sometimes never resolves the default request.
+      { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 },
     );
   };
 
@@ -723,8 +1042,11 @@ function LocationStep({ provider = false }: { provider?: boolean }) {
             : "Location helps BlueHope recommend nearby providers without continuously tracking you."}
         </p>
         <Button className="mt-6" onClick={requestLocation} disabled={status === "loading"}>
-          {status === "loading" ? "Requesting..." : "Request location permission"}
+          {status === "loading" ? "Getting your location…" : "Request location permission"}
         </Button>
+        {permissionHint ? (
+          <p className="mt-4 text-sm font-medium text-rose-600">{permissionHint}</p>
+        ) : null}
         {locationText ? (
           <motion.p
             initial={{ opacity: 0, y: 6 }}
@@ -734,6 +1056,30 @@ function LocationStep({ provider = false }: { provider?: boolean }) {
             {locationText}
           </motion.p>
         ) : null}
+        {status === "error" ? (
+          <Button variant="outline" className="mt-3" onClick={requestLocation}>
+            Try Again
+          </Button>
+        ) : null}
+        <div className="mt-5 w-full max-w-sm">
+          <Input
+            value={manualArea}
+            onChange={(event) => {
+              setManualArea(event.target.value);
+              setStatus("idle");
+              onLocationTextChange?.(event.target.value);
+              onLocationMetaChange?.({
+                source: event.target.value ? "manual" : null,
+                capturedAt: event.target.value ? new Date().toISOString() : null,
+              });
+            }}
+            placeholder="Or type your area / locality manually"
+            aria-label="Manual location entry"
+          />
+          <p className="mt-2 text-xs text-slate-500">
+            Manually entered areas are stored as user-provided information, not verified location data.
+          </p>
+        </div>
       </div>
       {provider ? (
         <div className="mt-6 grid gap-3 sm:grid-cols-3">

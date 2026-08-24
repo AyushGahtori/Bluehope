@@ -20,7 +20,7 @@ export function ProviderCard({ provider }: { provider: ProviderSummary }) {
           {provider.verificationStatus === "review_ready" ? "Profile reviewed" : "Trust setup pending"}
         </Badge>
         <span className="absolute right-3 top-3">
-          <SaveProviderButton compact />
+          <SaveProviderButton slug={provider.slug} name={provider.name} compact />
         </span>
       </div>
       <div>

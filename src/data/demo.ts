@@ -1,3 +1,18 @@
+/**
+ * TEMPORARY DEMO LISTINGS — REMOVE BEFORE LAUNCH.
+ *
+ * Every listing shown across search, profiles, dashboards, and reviews comes
+ * from this single file. Nothing is hardcoded inside page components.
+ *
+ * At launch:
+ * 1. Delete this file.
+ * 2. Remove its imports (search for `@/data/demo`) and replace them with
+ *    Firestore-backed queries against the real `listings` collection.
+ *
+ * The service layer (`search-service.ts`, `recommendation-service.ts`) is the
+ * only place that should touch this data, so the swap to Firestore stays a
+ * backend-only change.
+ */
 import type { ProviderSummary } from "@/types/domain";
 import { slugify } from "@/lib/utils";
 
@@ -255,6 +270,43 @@ const delhiDemoProviders: ProviderSummary[] = Array.from({ length: 50 }, (_, ind
 });
 
 export const demoProviders: ProviderSummary[] = [...baseDemoProviders, ...delhiDemoProviders];
+
+/**
+ * Demo enquiries for the shared demo workspace. This dataset lives ONLY in
+ * the demo data module — dashboard components must never hardcode records.
+ * It is shown exclusively in demo/guest sessions, never for authenticated
+ * accounts.
+ */
+export const demoEnquiries = [
+  {
+    id: "demo-enquiry-neha",
+    parentName: "Neha Iyer",
+    childName: "Aarav",
+    message: "Speech Delay · 4 years old · Mumbai",
+    status: "new",
+  },
+  {
+    id: "demo-enquiry-rahul",
+    parentName: "Rahul Mehta",
+    childName: "Kiara",
+    message: "Speech Delay · 4 years old · Mumbai",
+    status: "requested",
+  },
+  {
+    id: "demo-enquiry-simran",
+    parentName: "Simran Kaur",
+    childName: "Vihaan",
+    message: "Occupational Therapy · 6 years old · Mumbai",
+    status: "requested",
+  },
+  {
+    id: "demo-enquiry-amit",
+    parentName: "Amit Verma",
+    childName: "Anaya",
+    message: "Behavior Therapy · 5 years old · Mumbai",
+    status: "requested",
+  },
+];
 
 export const demoAppointments = [
   { date: "May 14", name: "Riya Shah", service: "Speech Therapy Session", time: "04:00 PM - 05:00 PM" },

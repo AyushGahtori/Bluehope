@@ -146,7 +146,10 @@ service cloud.firestore {
     }
 
     match /enquiries/{enquiryId} {
-      allow create: if signedIn() && request.resource.data.customerUid == request.auth.uid;
+      // Customers open enquiries; status transitions happen through the app/backend.
+      allow create: if signedIn()
+        && request.resource.data.customerUid == request.auth.uid
+        && request.resource.data.status == "open";
       allow read: if signedIn() && (
         resource.data.customerUid == request.auth.uid ||
         resource.data.providerUid == request.auth.uid ||
@@ -156,23 +159,49 @@ service cloud.firestore {
         resource.data.customerUid == request.auth.uid ||
         resource.data.providerUid == request.auth.uid ||
         isModerator()
-      );
+      )
+      && unchangedProtectedFields(["customerUid", "listingId", "createdAt"]);
       allow delete: if false;
     }
 
     match /bookings/{bookingId} {
-      allow create: if signedIn() && request.resource.data.customerUid == request.auth.uid;
+      // Bookings always start as unpaid requests; payment/completion states are
+      // finalized by trusted backend logic, never by client writes.
+      allow create: if signedIn()
+        && request.resource.data.customerUid == request.auth.uid
+        && request.resource.data.status == "requested"
+        && request.resource.data.paymentState in ["notRequired", "pending"];
       allow read, update: if signedIn() && (
         resource.data.customerUid == request.auth.uid ||
         resource.data.providerUid == request.auth.uid ||
         isModerator()
-      );
+      )
+      && unchangedProtectedFields(["customerUid", "listingId", "createdAt"]);
+      allow delete: if false;
+    }
+
+    match /availabilitySlots/{slotId} {
+      // Public read so parents can see open slots; only the slot owner may
+      // create/change them, and ownership is immutable.
+      allow read: if true;
+      allow create, update: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && unchangedProtectedFields(["ownerUid", "createdAt"]);
       allow delete: if false;
     }
 
     match /reviews/{reviewId} {
       allow read: if resource.data.status == "published" && resource.data.moderationState == "approved";
-      allow create: if signedIn() && request.resource.data.authorUid == request.auth.uid;
+      // Reviews must be born untrusted: draft status, pending moderation, no
+      // server-derived counters. The backend promotes/publishes after checks.
+      allow create: if signedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.status == "draft"
+        && request.resource.data.moderationState == "pending"
+        && request.resource.data.verifiedBooking == false
+        && request.resource.data.fraudFlags.size() == 0
+        && request.resource.data.reportCount == 0
+        && request.resource.data.helpfulCount == 0;
       allow update: if signedIn()
         && resource.data.authorUid == request.auth.uid
         && unchangedProtectedFields([
@@ -188,8 +217,22 @@ service cloud.firestore {
 
       match /replies/{replyId} {
         allow read: if get(/databases/$(database)/documents/reviews/$(reviewId)).data.status == "published";
-        allow create: if signedIn();
-        allow update: if signedIn() && resource.data.authorUid == request.auth.uid;
+        allow create: if signedIn()
+          && request.resource.data.authorUid == request.auth.uid
+          && get(/databases/$(database)/documents/reviews/$(reviewId)).data.status == "published"
+          && request.resource.data.moderationState == "pending"
+          && request.resource.data.helpfulCount == 0
+          && request.resource.data.reportCount == 0;
+        allow update: if signedIn()
+          && resource.data.authorUid == request.auth.uid
+          && unchangedProtectedFields([
+            "authorUid",
+            "reviewId",
+            "moderationState",
+            "helpfulCount",
+            "reportCount",
+            "createdAt"
+          ]);
         allow delete: if false;
       }
     }
@@ -210,7 +253,10 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if signedIn()
           && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids;
-        allow create: if signedIn() && request.resource.data.senderUid == request.auth.uid;
+        // Only confirmed conversation participants may write messages into the thread.
+        allow create: if signedIn()
+          && request.resource.data.senderUid == request.auth.uid
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids;
         allow update, delete: if false;
       }
     }

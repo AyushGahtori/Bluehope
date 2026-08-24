@@ -76,6 +76,51 @@ export function Input({ className, ...props }: ComponentPropsWithoutRef<"input">
   );
 }
 
+export function BlueCheckbox({
+  checked,
+  onCheckedChange,
+  label,
+  description,
+  disabled = false,
+  className,
+}: {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onCheckedChange(!checked)}
+      className={cn(
+        "group flex w-full items-start gap-3 rounded-[10px] p-2 text-left transition hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-60",
+        className,
+      )}
+    >
+      <span
+        className={cn(
+          "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition",
+          checked
+            ? "border-bluehope bg-bluehope text-white shadow-sm"
+            : "border-slate-300 bg-white group-hover:border-bluehope",
+        )}
+      >
+        {checked ? <Check className="h-3.5 w-3.5" /> : null}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-slate-900">{label}</span>
+        {description ? <span className="mt-0.5 block text-xs leading-5 text-slate-500">{description}</span> : null}
+      </span>
+    </button>
+  );
+}
+
 export function Select({ className, ...props }: ComponentPropsWithoutRef<"select">) {
   return (
     <div className="relative">
@@ -147,7 +192,11 @@ export function BlueSelect({
         type="button"
         aria-label={ariaLabel ?? placeholder}
         aria-expanded={open}
+        aria-haspopup="listbox"
         onClick={() => setOpen((value) => !value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false);
+        }}
         className={cn(
           "group flex h-12 w-full items-center justify-between rounded-[12px] border border-slate-300 bg-white px-4 text-left text-sm font-semibold text-slate-800 shadow-sm transition hover:border-blue-200 focus:border-bluehope focus:outline-none focus:ring-4 focus:ring-blue-100",
           open && "border-bluehope ring-4 ring-blue-100",
@@ -166,6 +215,7 @@ export function BlueSelect({
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
             className="absolute left-0 right-0 top-full z-50 max-h-72 overflow-auto rounded-[12px] border border-blue-100 bg-white p-1.5 shadow-soft"
+            role="listbox"
           >
             {options.map((option) => {
               const selected = option.value === selectedValue;
@@ -173,6 +223,8 @@ export function BlueSelect({
                 <motion.button
                   key={option.value}
                   type="button"
+                  role="option"
+                  aria-selected={selected}
                   whileHover="hover"
                   onClick={() => choose(option.value)}
                   className={cn(

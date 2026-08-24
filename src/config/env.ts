@@ -37,3 +37,32 @@ export const hasFirebaseClientConfig = Boolean(
     firebaseClientConfig.projectId &&
     firebaseClientConfig.appId,
 );
+
+export function getFirebaseClientConfigIssue() {
+  const missing = Object.entries({
+    NEXT_PUBLIC_FIREBASE_API_KEY: firebaseClientConfig.apiKey,
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: firebaseClientConfig.authDomain,
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: firebaseClientConfig.projectId,
+    NEXT_PUBLIC_FIREBASE_APP_ID: firebaseClientConfig.appId,
+  })
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+
+  if (missing.length > 0) {
+    return `Missing Firebase web config: ${missing.join(", ")}. Add the values to .env.local and restart the dev server.`;
+  }
+
+  if (
+    firebaseClientConfig.authDomain &&
+    firebaseClientConfig.projectId &&
+    !firebaseClientConfig.authDomain.startsWith(`${firebaseClientConfig.projectId}.`)
+  ) {
+    return "Firebase authDomain does not match projectId. Copy the Web App config from the same Firebase project.";
+  }
+
+  if (firebaseClientConfig.apiKey && !firebaseClientConfig.apiKey.startsWith("AIza")) {
+    return "Firebase API key format is invalid. Copy the browser Web API key from Firebase Project settings.";
+  }
+
+  return null;
+}

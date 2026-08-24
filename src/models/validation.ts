@@ -100,3 +100,32 @@ export const bookingSchema = z.object({
   endsAt: z.string().datetime(),
   notes: z.string().max(1500).optional(),
 });
+
+export const reviewReplySchema = z.object({
+  text: z.string().min(1).max(2000),
+  mediaIds: z.array(z.string().min(1)).max(3).default([]),
+});
+
+export const availabilitySlotSchema = z.object({
+  listingId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startsAt: z.string().datetime(),
+  endsAt: z.string().datetime(),
+  capacity: z.number().int().min(1).max(24).default(1),
+  blocked: z.boolean().default(false),
+  mode: z.enum(["clinic", "online", "homeVisit"]).default("clinic"),
+});
+
+export const conversationCreateSchema = z.object({
+  participantUids: z.array(z.string().min(1)).min(2).max(10),
+  relatedEntityType: z.enum(["enquiry", "booking", "listing"]).optional(),
+  relatedEntityId: z.string().min(1).optional(),
+});
+
+export const messageSchema = z.object({
+  text: z.string().max(4000).optional(),
+  attachmentMediaIds: z.array(z.string().min(1)).max(5).default([]),
+}).refine(
+  (value) => (value.text && value.text.length > 0) || value.attachmentMediaIds.length > 0,
+  { message: "Message must contain text or at least one attachment" },
+);

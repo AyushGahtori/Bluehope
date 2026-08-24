@@ -2,10 +2,12 @@ import "server-only";
 
 import { FieldValue, GeoPoint } from "firebase-admin/firestore";
 import {
+  ACCOUNT_ROLES,
   COLLECTIONS,
   type ChildProfileDocument,
   type CustomerProfileDocument,
   type FirestoreLocation,
+  type SelfServeAccountRole,
   type UserDocument,
 } from "@/models/firestore";
 import {
@@ -82,31 +84,115 @@ export async function upsertUserFromAuth(
   const parsed = upsertUserSchema.parse(body);
   const reference = db().collection(COLLECTIONS.users).doc(uid);
   const now = FieldValue.serverTimestamp();
+  const snapshot = await reference.get();
 
-  const payload: Partial<UserDocument> = {
-    uid,
-    email: authData.email ?? null,
-    phone: authData.phone ?? null,
-    role: parsed.role,
-    authProvider: authData.providerIds ?? [],
-    accountStatus: "active",
-    displayName: parsed.displayName ?? authData.displayName ?? null,
-    photoURL: authData.photoURL ?? null,
-    onboardingCompleted: parsed.onboardingCompleted ?? false,
-    updatedAt: now,
-    lastLoginAt: now,
-  };
+  if (!snapshot.exists) {
+    // First write establishes the account; the requested role becomes permanent.
+    const payload: Partial<UserDocument> = {
+      uid,
+      email: authData.email ?? null,
+      phone: authData.phone ?? null,
+      role: parsed.role,
+      authProvider: authData.providerIds ?? [],
+      accountStatus: "active",
+      displayName: parsed.displayName ?? authData.displayName ?? null,
+      photoURL: authData.photoURL ?? null,
+      onboardingCompleted: parsed.onboardingCompleted ?? false,
+      updatedAt: now,
+      lastLoginAt: now,
+    };
+
+    await reference.set({ ...payload, createdAt: now }, { merge: true });
+  } else {
+    // Existing accounts keep their authoritative role and status; only
+    // display attributes and login metadata may change here.
+    await reference.set(
+      {
+        uid,
+        email: authData.email ?? null,
+        phone: authData.phone ?? null,
+        authProvider: authData.providerIds ?? [],
+        displayName: parsed.displayName ?? authData.displayName ?? null,
+        photoURL: authData.photoURL ?? null,
+        onboardingCompleted: parsed.onboardingCompleted ?? false,
+        updatedAt: now,
+        lastLoginAt: now,
+      },
+      { merge: true },
+    );
+  }
+
+  const updated = await reference.get();
+  return publicUserData(updated.data());
+}
+
+export type EstablishRoleResult =
+  | { status: "created"; role: SelfServeAccountRole }
+  | { status: "existing"; role: SelfServeAccountRole }
+  | { status: "conflict"; role: SelfServeAccountRole };
+
+/**
+ * Authoritative role assignment keyed by Firebase UID. A single direct
+ * document lookup decides whether the account is created with the desired
+ * role, continued under its matching role, or blocked by a role conflict.
+ */
+export async function establishUserRole(
+  uid: string,
+  desiredRole: string,
+  profile: {
+    email?: string | null;
+    displayName?: string | null;
+    photoURL?: string | null;
+    providerIds?: string[];
+  } = {},
+): Promise<EstablishRoleResult | { status: "invalid_role" }> {
+  if (!ACCOUNT_ROLES.includes(desiredRole as SelfServeAccountRole)) {
+    return { status: "invalid_role" };
+  }
+
+  const role = desiredRole as SelfServeAccountRole;
+  const reference = db().collection(COLLECTIONS.users).doc(uid);
+  const now = FieldValue.serverTimestamp();
+  const snapshot = await reference.get();
+
+  if (!snapshot.exists) {
+    const payload: Partial<UserDocument> = {
+      uid,
+      email: profile.email ?? null,
+      phone: null,
+      role,
+      authProvider: profile.providerIds ?? ["google.com"],
+      accountStatus: "active",
+      displayName: profile.displayName ?? null,
+      photoURL: profile.photoURL ?? null,
+      onboardingCompleted: false,
+      updatedAt: now,
+      lastLoginAt: now,
+    };
+    await reference.set({ ...payload, createdAt: now }, { merge: true });
+    return { status: "created", role };
+  }
+
+  const data = snapshot.data() as Partial<UserDocument> | undefined;
+  const existingRole = data?.role;
+
+  if (existingRole && existingRole !== role) {
+    return { status: "conflict", role: existingRole as SelfServeAccountRole };
+  }
 
   await reference.set(
     {
-      ...payload,
-      createdAt: now,
+      uid,
+      ...(profile.email !== undefined ? { email: profile.email } : {}),
+      ...(profile.displayName ? { displayName: profile.displayName } : {}),
+      ...(profile.photoURL ? { photoURL: profile.photoURL } : {}),
+      ...(profile.providerIds?.length ? { authProvider: profile.providerIds } : {}),
+      updatedAt: now,
+      lastLoginAt: now,
     },
     { merge: true },
   );
-
-  const snapshot = await reference.get();
-  return publicUserData(snapshot.data());
+  return { status: "existing", role: (existingRole ?? role) as SelfServeAccountRole };
 }
 
 export async function getCustomerProfile(uid: string) {
@@ -226,6 +312,196 @@ export async function updateChildProfile(uid: string, childId: string, body: unk
 
   await db().collection(COLLECTIONS.childProfiles).doc(childId).set(payload, { merge: true });
   return getChildProfile(uid, childId);
+}
+
+export type ProviderProfileKind = "soleProvider" | "institution";
+
+export type ProviderProfileView = {
+  id: string;
+  ownerUid: string;
+  listingId: string;
+  kind: ProviderProfileKind;
+  name: string;
+  tagline: string;
+  bio: string;
+  images: string[];
+  services: string[];
+  conditions: string[];
+  weeklyHours: Record<string, { open: string; close: string } | null>;
+  location: {
+    text: string;
+    source: "browser_geolocation" | "manual" | null;
+    capturedAt: string | null;
+    latitude: number | null;
+    longitude: number | null;
+  } | null;
+  pricing: { minFee: string; maxFee: string; sessionLabel: string };
+  contact: { phone: string; email: string; whatsapp: string };
+  details: { officialName: string; foundedYear: string; registrationNumber: string; website: string };
+  profileCompleteness: number;
+  missingItems: string[];
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+/** Sections that define profile completion. Optional features (Q&A,
+ * verification) intentionally do not count toward basic completion. */
+const COMPLETION_SECTIONS: Array<{ key: string; label: string; isComplete: (p: ProviderProfileView) => boolean }> = [
+  { key: "name", label: "Basic info", isComplete: (p) => p.name.trim().length > 0 },
+  { key: "images", label: "Photos", isComplete: (p) => p.images.length > 0 },
+  { key: "bio", label: "Bio", isComplete: (p) => p.bio.trim().length >= 80 },
+  { key: "services", label: "Services", isComplete: (p) => p.services.length > 0 },
+  { key: "conditions", label: "Conditions", isComplete: (p) => p.conditions.length > 0 },
+  {
+    key: "hours",
+    label: "Opening hours",
+    isComplete: (p) => Object.values(p.weeklyHours).some((entry) => entry !== null),
+  },
+  { key: "location", label: "Location", isComplete: (p) => Boolean(p.location?.text) },
+  {
+    key: "pricing",
+    label: "Pricing",
+    isComplete: (p) => Boolean(p.pricing.minFee || p.pricing.maxFee),
+  },
+  {
+    key: "contact",
+    label: "Contact details",
+    isComplete: (p) => Boolean(p.contact.phone || p.contact.email),
+  },
+];
+
+export function computeProfileCompletion(profile: ProviderProfileView) {
+  const missing = COMPLETION_SECTIONS.filter((section) => !section.isComplete(profile)).map(
+    (section) => section.label,
+  );
+  const percent = Math.round(((COMPLETION_SECTIONS.length - missing.length) / COMPLETION_SECTIONS.length) * 100);
+  return { percent, missingItems: missing };
+}
+
+function normalizeProfile(
+  id: string,
+  kind: ProviderProfileKind,
+  data: FirebaseFirestore.DocumentData,
+): ProviderProfileView {
+  const location = (data.location ?? null) as ProviderProfileView["location"];
+  const view: ProviderProfileView = {
+    id,
+    ownerUid: data.ownerUid,
+    listingId: data.listingId ?? id,
+    kind,
+    name: data.name ?? data.organizationName ?? "",
+    tagline: data.tagline ?? "",
+    bio: data.bio ?? "",
+    images: Array.isArray(data.images) ? data.images : [],
+    services: Array.isArray(data.services) ? data.services : [],
+    conditions: Array.isArray(data.conditions) ? data.conditions : [],
+    weeklyHours: data.weeklyHours ?? {},
+    location,
+    pricing: data.pricing ?? { minFee: "", maxFee: "", sessionLabel: "" },
+    contact: data.contact ?? { phone: "", email: "", whatsapp: "" },
+    details: data.details ?? { officialName: "", foundedYear: "", registrationNumber: "", website: "" },
+    profileCompleteness: typeof data.profileCompleteness === "number" ? data.profileCompleteness : 0,
+    missingItems: [],
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+  const completion = computeProfileCompletion(view);
+  return { ...view, profileCompleteness: completion.percent, missingItems: completion.missingItems };
+}
+
+function profileCollectionFor(kind: ProviderProfileKind) {
+  return kind === "institution"
+    ? db().collection(COLLECTIONS.institutionProfiles)
+    : db().collection(COLLECTIONS.providerProfiles);
+}
+
+/** Finds the caller's own profile document — a direct ownerUid-scoped query. */
+export async function getProviderProfileByOwner(
+  uid: string,
+  kind: ProviderProfileKind,
+): Promise<ProviderProfileView | null> {
+  const snapshot = await profileCollectionFor(kind)
+    .where("ownerUid", "==", uid)
+    .limit(1)
+    .get();
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs[0];
+  return normalizeProfile(doc.id, kind, doc.data());
+}
+
+export async function upsertProviderProfile(
+  uid: string,
+  kind: ProviderProfileKind,
+  patch: Record<string, unknown>,
+): Promise<ProviderProfileView> {
+  const collection = profileCollectionFor(kind);
+  const existing = await getProviderProfileByOwner(uid, kind);
+  const reference = existing ? collection.doc(existing.id) : collection.doc();
+  const now = FieldValue.serverTimestamp();
+
+  const base = existing
+    ? {}
+    : {
+        ownerUid: uid,
+        listingId: reference.id,
+        profileStatus: "draft",
+        createdAt: now,
+      };
+
+  await reference.set(
+    {
+      ...base,
+      ...patch,
+      ownerUid: uid,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+
+  const saved = await reference.get();
+  return normalizeProfile(reference.id, kind, saved.data() ?? {});
+}
+
+/**
+ * Account-scoped dashboard queries. Every list is filtered by the verified
+ * Firebase UID on the server — never fetched in bulk and filtered client-side.
+ */
+export async function listEnquiriesForProvider(uid: string, limit = 50) {
+  const snapshot = await db()
+    .collection(COLLECTIONS.enquiries)
+    .where("providerUid", "==", uid)
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+export async function listBookingsForProvider(uid: string, limit = 50) {
+  const snapshot = await db()
+    .collection(COLLECTIONS.bookings)
+    .where("providerUid", "==", uid)
+    .orderBy("startsAt", "asc")
+    .limit(limit)
+    .get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+export async function listReviewsForProvider(uid: string, limit = 50) {
+  const profile = await getProviderProfileByOwner(
+    uid,
+    "institution",
+  ).catch(() => null);
+  const providerProfile =
+    profile ?? (await getProviderProfileByOwner(uid, "soleProvider").catch(() => null));
+  if (!providerProfile) return [];
+
+  const snapshot = await db()
+    .collection(COLLECTIONS.reviews)
+    .where("listingId", "==", providerProfile.listingId)
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function softDeleteChildProfile(uid: string, childId: string) {

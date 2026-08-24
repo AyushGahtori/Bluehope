@@ -1,5 +1,6 @@
 import { demoProviders } from "@/data/demo";
 import { conditions, services } from "@/data/taxonomy";
+import { ageGroupMatches } from "@/services/search-service";
 import type { ProviderSummary, RecommendationContext, RecommendationResult } from "@/types/domain";
 
 const conditionNames = new Map(conditions.map((condition) => [condition.id, condition.name]));
@@ -47,9 +48,9 @@ export function recommendProviders(context: RecommendationContext): Recommendati
         reasons.push(`Offers ${matchedServices.map((id) => serviceNames.get(id) ?? id).join(", ")}.`);
       }
 
-      if (context.age && provider.ageGroups.some((group) => group.includes(String(context.age)))) {
+      if (ageGroupMatches(provider.ageGroups, context.age)) {
         score += weights.age;
-        reasons.push("Matches the selected age context.");
+        reasons.push(`Works with age ${context.age}.`);
       }
 
       if (provider.distanceKm !== undefined) {
