@@ -23,6 +23,7 @@ import {
   saveParentOnboarding,
 } from "@/lib/parent-onboarding";
 import { signInWithGoogleAndEstablishRole } from "@/lib/auth-service";
+import { authedApiHeaders } from "@/lib/api-client";
 import { RoleConflictScreen } from "@/features/onboarding/role-conflict-screen";
 import type { SelfServeAccountRole } from "@/models/firestore";
 import { conditions, services } from "@/data/taxonomy";
@@ -43,7 +44,7 @@ const roleCopy = {
   institute: {
     title: "Set up your institute profile",
     subtitle: "List your organization, services, and future branch structure.",
-    steps: ["Organization", "Sign in", "Business", "Services", "Opening hours", "Locations"],
+    steps: ["Sign in", "Organization", "Business", "Services", "Opening hours", "Locations"],
   },
 } satisfies Record<Role, { title: string; subtitle: string; steps: string[] }>;
 
@@ -60,6 +61,31 @@ export function OnboardingFlow({ role }: { role: Role }) {
   }>({ source: null, capturedAt: null });
   const [saving, setSaving] = useState(false);
   const [checkingAccount, setCheckingAccount] = useState(false);
+  const [providerDetails, setProviderDetails] = useState({
+    firstName: "",
+    lastName: "",
+    displayName: "",
+    title: "",
+    email: "",
+    phone: "",
+  });
+  const [orgDetails, setOrgDetails] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    representative: "",
+    designation: "",
+    website: "",
+    gst: "",
+    registration: "",
+    foundedYear: "",
+    orgType: "",
+  });
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
+  const [weeklyHours, setWeeklyHours] = useState<
+    Record<string, { open: string; close: string } | null>
+  >({});
   const [roleConflict, setRoleConflict] = useState<SelfServeAccountRole | null>(null);
   const [saveStatus, setSaveStatus] = useState("");
   const [basicInfo, setBasicInfo] = useState({
@@ -78,7 +104,86 @@ export function OnboardingFlow({ role }: { role: Role }) {
     "sensory-processing",
   ]);
   const copy = roleCopy[role];
+  // The institute flow authenticates first (sign-in is step 1); the parent and
+  // provider flows keep their intro step before sign-in.
+  const signInStep = role === "institute" ? 0 : 1;
   const progress = ((step + 1) / copy.steps.length) * 100;
+  const dashboardPath =
+    role === "parent"
+      ? "/dashboard/parent"
+      : role === "provider"
+        ? "/dashboard/provider"
+        : "/dashboard/institute";
+
+  type ExistingProfile = {
+    name?: string;
+    tagline?: string;
+    bio?: string;
+    images?: string[];
+    services?: string[];
+    conditions?: string[];
+    weeklyHours?: Record<string, { open: string; close: string } | null>;
+    contact?: Record<string, string>;
+    details?: Record<string, string>;
+  };
+
+  /**
+   * Recognizes an already-registered provider/institute account: the profile
+   * is looked up by the authenticated Firebase UID, and any previously saved
+   * data means the user should not repeat onboarding steps.
+   */
+  const checkProviderProfile = async (): Promise<
+    { kind: "complete" } | { kind: "incomplete"; profile: ExistingProfile } | { kind: "unknown" }
+  > => {
+    const headers = await authedApiHeaders();
+    if (!headers) return { kind: "unknown" };
+    try {
+      const response = await fetch("/api/provider-profile", { headers, cache: "no-store" });
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok || !body || typeof body !== "object") return { kind: "unknown" };
+      const profile = (body as { profile?: ExistingProfile | null }).profile;
+      if (!profile) return { kind: "unknown" };
+      const hasData = Boolean(
+        (profile.name ?? "").trim() ||
+          (profile.bio ?? "").trim() ||
+          (profile.tagline ?? "").trim() ||
+          (profile.images?.length ?? 0) > 0 ||
+          (profile.services?.length ?? 0) > 0 ||
+          Object.keys(profile.weeklyHours ?? {}).length > 0,
+      );
+      return hasData ? { kind: "complete" } : { kind: "incomplete", profile };
+    } catch {
+      return { kind: "unknown" };
+    }
+  };
+
+  /** Prefills the onboarding steps with values already saved on the profile. */
+  const applyProfileToSteps = (profile: ExistingProfile) => {
+    if (role === "provider") {
+      setProviderDetails((current) => ({
+        ...current,
+        displayName: current.displayName || profile.name || "",
+        title: current.title || profile.tagline || "",
+        email: current.email || profile.contact?.email || "",
+        phone: current.phone || profile.contact?.phone || "",
+      }));
+    } else if (role === "institute") {
+      setOrgDetails((current) => ({
+        ...current,
+        name: current.name || profile.name || "",
+        email: current.email || profile.contact?.email || "",
+        phone: current.phone || profile.contact?.phone || "",
+        website: current.website || profile.details?.website || "",
+        foundedYear: current.foundedYear || profile.details?.foundedYear || "",
+        registration: current.registration || profile.details?.registrationNumber || "",
+      }));
+    }
+    if (profile.services?.length) setSelectedServices(profile.services);
+    if (profile.conditions?.length) setSelectedConditions(profile.conditions);
+    if (profile.weeklyHours && Object.keys(profile.weeklyHours).length > 0) {
+      setWeeklyHours(profile.weeklyHours);
+    }
+  };
 
   // Returning users who already completed onboarding go straight to the dashboard.
   useEffect(() => {
@@ -140,6 +245,48 @@ export function OnboardingFlow({ role }: { role: Role }) {
       cancelled = true;
       unsubscribe();
     };
+  }, [role, router]);
+
+  // Provider/institute: recognize returning registered accounts. A signed-in
+  // user with a saved profile goes straight to the dashboard; a signed-in
+  // user without one resumes after the sign-in step with saved values.
+  useEffect(() => {
+    if (role === "parent") return;
+    const auth = getFirebaseAuth();
+    if (!auth) return;
+
+    let cancelled = false;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user || cancelled) return;
+
+      window.localStorage.setItem(
+        "bluehope.authUser",
+        JSON.stringify({
+          uid: user.uid,
+          name: user.displayName ?? "",
+          email: user.email ?? "",
+          photoURL: user.photoURL ?? "",
+        }),
+      );
+      setAuthUser({ uid: user.uid, name: user.displayName ?? "", email: user.email ?? "" });
+
+      const resume = await checkProviderProfile();
+      if (cancelled) return;
+      if (resume.kind === "complete") {
+        router.replace(dashboardPath);
+        return;
+      }
+      if (resume.kind === "incomplete") {
+        applyProfileToSteps(resume.profile);
+      }
+      setStep((current) => (current < signInStep + 1 ? signInStep + 1 : current));
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, router]);
 
   const filteredConditions = useMemo(() => {
@@ -226,6 +373,27 @@ export function OnboardingFlow({ role }: { role: Role }) {
         firstName: current.firstName || (outcome.displayName ?? "").split(" ")[0] || "",
         lastName: current.lastName || (outcome.displayName ?? "").split(" ").slice(1).join(" "),
       }));
+
+      if (role !== "parent") {
+        // Recognize accounts that already registered as this role: jump to
+        // the dashboard, or resume after sign-in with their saved details.
+        setAuthMessage("Checking your account...");
+        setCheckingAccount(true);
+        try {
+          const resume = await checkProviderProfile();
+          if (resume.kind === "complete") {
+            router.replace(dashboardPath);
+            return;
+          }
+          if (resume.kind === "incomplete") {
+            applyProfileToSteps(resume.profile);
+          }
+          } finally {
+            setCheckingAccount(false);
+          }
+        setStep((current) => (current < signInStep + 1 ? signInStep + 1 : current));
+      }
+
       setAuthMessage("Google sign-in completed.");
     } catch {
       setAuthMessage("We couldn't complete Google sign-in right now. Please try again.");
@@ -233,7 +401,7 @@ export function OnboardingFlow({ role }: { role: Role }) {
   };
 
   const validateCurrentStep = () => {
-    if (step === 1 && !authUser) {
+    if (step === signInStep && !authUser) {
       setAuthMessage("Please continue with Google before moving ahead.");
       return false;
     }
@@ -287,14 +455,55 @@ export function OnboardingFlow({ role }: { role: Role }) {
       } finally {
         setSaving(false);
       }
+    } else {
+      // Provider/institute: persist the collected onboarding details to the
+      // caller's own profile so the next visit is recognized as registered.
+      setSaving(true);
+      setSaveStatus("");
+      try {
+        const headers = await authedApiHeaders();
+        if (headers) {
+          const payload =
+            role === "provider"
+              ? {
+                  name:
+                    providerDetails.displayName ||
+                    `${providerDetails.firstName} ${providerDetails.lastName}`.trim(),
+                  tagline: providerDetails.title,
+                  services: selectedServices,
+                  conditions: selectedConditions,
+                  weeklyHours,
+                  contact: { email: providerDetails.email, phone: providerDetails.phone },
+                }
+              : {
+                  name: orgDetails.name,
+                  services: selectedServices,
+                  conditions: selectedConditions,
+                  weeklyHours,
+                  contact: { email: orgDetails.email, phone: orgDetails.phone },
+                  details: {
+                    website: orgDetails.website,
+                    foundedYear: orgDetails.foundedYear,
+                    registrationNumber: orgDetails.registration,
+                    orgType: orgDetails.orgType,
+                  },
+                };
+          const response = await fetch("/api/provider-profile", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", ...headers },
+            body: JSON.stringify(payload),
+          });
+          setSaveStatus(
+            response.ok
+              ? "Your details were saved to your account."
+              : "We couldn't save everything just now — you can complete this later under Edit Profile.",
+          );
+        }
+      } finally {
+        setSaving(false);
+      }
     }
-    router.push(
-      role === "parent"
-        ? "/dashboard/parent"
-        : role === "provider"
-          ? "/dashboard/provider"
-          : "/dashboard/institute",
-    );
+    router.push(dashboardPath);
   };
 
   return (
@@ -385,6 +594,31 @@ export function OnboardingFlow({ role }: { role: Role }) {
                       authUser={authUser}
                       authMessage={authMessage}
                       onGoogleSignIn={signInWithGoogle}
+                      details={providerDetails}
+                      onDetailsChange={(patch) =>
+                        setProviderDetails((current) => ({ ...current, ...patch }))
+                      }
+                      selectedServices={selectedServices}
+                      selectedConditions={selectedConditions}
+                      onToggleService={(item) =>
+                        setSelectedServices((current) =>
+                          current.includes(item)
+                            ? current.filter((entry) => entry !== item)
+                            : [...current, item],
+                        )
+                      }
+                      onToggleCondition={(item) =>
+                        setSelectedConditions((current) =>
+                          current.includes(item)
+                            ? current.filter((entry) => entry !== item)
+                            : [...current, item],
+                        )
+                      }
+                      weeklyHours={weeklyHours}
+                      onWeeklyHoursChange={setWeeklyHours}
+                      locationText={locationText}
+                      onLocationTextChange={setLocationText}
+                      onLocationMetaChange={setLocationMeta}
                     />
                   ) : (
                     <InstituteStep
@@ -392,6 +626,23 @@ export function OnboardingFlow({ role }: { role: Role }) {
                       authUser={authUser}
                       authMessage={authMessage}
                       onGoogleSignIn={signInWithGoogle}
+                      details={orgDetails}
+                      onDetailsChange={(patch) =>
+                        setOrgDetails((current) => ({ ...current, ...patch }))
+                      }
+                      selectedServices={selectedServices}
+                      onToggleService={(item) =>
+                        setSelectedServices((current) =>
+                          current.includes(item)
+                            ? current.filter((entry) => entry !== item)
+                            : [...current, item],
+                        )
+                      }
+                      weeklyHours={weeklyHours}
+                      onWeeklyHoursChange={setWeeklyHours}
+                      locationText={locationText}
+                      onLocationTextChange={setLocationText}
+                      onLocationMetaChange={setLocationMeta}
                     />
                   )}
                 </motion.div>
@@ -408,7 +659,22 @@ export function OnboardingFlow({ role }: { role: Role }) {
                 Back
               </Button>
               {step < copy.steps.length - 1 ? (
-                <Button onClick={goNext} disabled={checkingAccount || saving || Boolean(roleConflict)}>
+                <Button
+                  onClick={goNext}
+                  // The sign-in step cannot be passed until Google sign-in has
+                  // fully completed and the account/role is established.
+                  disabled={
+                    checkingAccount ||
+                    saving ||
+                    Boolean(roleConflict) ||
+                    (step === signInStep && !authUser)
+                  }
+                  title={
+                    step === signInStep && !authUser
+                      ? "Sign in with Google to continue"
+                      : undefined
+                  }
+                >
                   {checkingAccount ? "Checking..." : "Continue"}
                   {!checkingAccount ? <ChevronRight className="h-4 w-4" /> : null}
                 </Button>
@@ -701,26 +967,104 @@ function Field({
   );
 }
 
+type WeeklyHours = Record<string, { open: string; close: string } | null>;
+
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+const DAY_LABELS: Record<string, string> = {
+  mon: "Monday",
+  tue: "Tuesday",
+  wed: "Wednesday",
+  thu: "Thursday",
+  fri: "Friday",
+  sat: "Saturday",
+  sun: "Sunday",
+};
+
 function ProviderStep({
   step,
   authUser,
   authMessage,
   onGoogleSignIn,
+  details,
+  onDetailsChange,
+  selectedServices,
+  selectedConditions,
+  onToggleService,
+  onToggleCondition,
+  weeklyHours,
+  onWeeklyHoursChange,
+  locationText,
+  onLocationTextChange,
+  onLocationMetaChange,
 }: {
   step: number;
   authUser: { uid: string; name: string; email: string } | null;
   authMessage: string;
   onGoogleSignIn: () => void;
+  details: {
+    firstName: string;
+    lastName: string;
+    displayName: string;
+    title: string;
+    email: string;
+    phone: string;
+  };
+  onDetailsChange: (patch: Partial<{
+    firstName: string;
+    lastName: string;
+    displayName: string;
+    title: string;
+    email: string;
+    phone: string;
+  }>) => void;
+  selectedServices: string[];
+  selectedConditions: string[];
+  onToggleService: (item: string) => void;
+  onToggleCondition: (item: string) => void;
+  weeklyHours: WeeklyHours;
+  onWeeklyHoursChange: (value: WeeklyHours) => void;
+  locationText: string;
+  onLocationTextChange: (value: string) => void;
+  onLocationMetaChange?: (meta: {
+    source: "browser_geolocation" | "manual" | null;
+    capturedAt: string | null;
+  }) => void;
 }) {
   if (step === 0) {
     return (
       <div className="grid gap-5 sm:grid-cols-2">
-        <Input placeholder="First name" />
-        <Input placeholder="Last name" />
-        <Input placeholder="Display / professional name" />
-        <Input placeholder="Professional title" />
-        <Input placeholder="Email" />
-        <Input placeholder="Phone" />
+        <Input
+          value={details.firstName}
+          onChange={(event) => onDetailsChange({ firstName: event.target.value })}
+          placeholder="First name"
+        />
+        <Input
+          value={details.lastName}
+          onChange={(event) => onDetailsChange({ lastName: event.target.value })}
+          placeholder="Last name"
+        />
+        <Input
+          value={details.displayName}
+          onChange={(event) => onDetailsChange({ displayName: event.target.value })}
+          placeholder="Display / professional name"
+        />
+        <Input
+          value={details.title}
+          onChange={(event) => onDetailsChange({ title: event.target.value })}
+          placeholder="Professional title"
+        />
+        <Input
+          value={details.email}
+          onChange={(event) => onDetailsChange({ email: event.target.value })}
+          placeholder="Email"
+          type="email"
+        />
+        <Input
+          value={details.phone}
+          onChange={(event) => onDetailsChange({ phone: event.target.value })}
+          placeholder="Phone"
+          type="tel"
+        />
       </div>
     );
   }
@@ -732,8 +1076,18 @@ function ProviderStep({
   if (step === 2) {
     return (
       <div className="grid gap-6 lg:grid-cols-2">
-        <CheckboxGrid title="Services provided" items={services.map((service) => service.name)} />
-        <CheckboxGrid title="Conditions supported" items={conditions.slice(0, 10).map((condition) => condition.name)} />
+        <CheckboxGrid
+          title="Services provided"
+          items={services.map((service) => service.name)}
+          selected={selectedServices}
+          onToggle={onToggleService}
+        />
+        <CheckboxGrid
+          title="Conditions supported"
+          items={conditions.slice(0, 10).map((condition) => condition.name)}
+          selected={selectedConditions}
+          onToggle={onToggleCondition}
+        />
       </div>
     );
   }
@@ -743,10 +1097,17 @@ function ProviderStep({
   }
 
   if (step === 4) {
-    return <OpeningHoursStep />;
+    return <OpeningHoursStep value={weeklyHours} onChange={onWeeklyHoursChange} />;
   }
 
-  return <LocationStep provider />;
+  return (
+    <LocationStep
+      provider
+      locationText={locationText}
+      onLocationTextChange={onLocationTextChange}
+      onLocationMetaChange={onLocationMetaChange}
+    />
+  );
 }
 
 function InstituteStep({
@@ -754,37 +1115,121 @@ function InstituteStep({
   authUser,
   authMessage,
   onGoogleSignIn,
+  details,
+  onDetailsChange,
+  selectedServices,
+  onToggleService,
+  weeklyHours,
+  onWeeklyHoursChange,
+  locationText,
+  onLocationTextChange,
+  onLocationMetaChange,
 }: {
   step: number;
   authUser: { uid: string; name: string; email: string } | null;
   authMessage: string;
   onGoogleSignIn: () => void;
+  details: {
+    name: string;
+    email: string;
+    phone: string;
+    representative: string;
+    designation: string;
+    website: string;
+    gst: string;
+    registration: string;
+    foundedYear: string;
+    orgType: string;
+  };
+  onDetailsChange: (patch: Partial<{
+    name: string;
+    email: string;
+    phone: string;
+    representative: string;
+    designation: string;
+    website: string;
+    gst: string;
+    registration: string;
+    foundedYear: string;
+    orgType: string;
+  }>) => void;
+  selectedServices: string[];
+  onToggleService: (item: string) => void;
+  weeklyHours: WeeklyHours;
+  onWeeklyHoursChange: (value: WeeklyHours) => void;
+  locationText: string;
+  onLocationTextChange: (value: string) => void;
+  onLocationMetaChange?: (meta: {
+    source: "browser_geolocation" | "manual" | null;
+    capturedAt: string | null;
+  }) => void;
 }) {
+  // Institute flow: Google sign-in happens first (step 0) so the Firebase UID
+  // exists before any institute profile data is collected or created.
   if (step === 0) {
-    return (
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Input placeholder="Organization name" />
-        <Input placeholder="Official email" />
-        <Input placeholder="Phone number" />
-        <Input placeholder="Representative name" />
-        <Input placeholder="Representative designation" />
-        <Input placeholder="Website" />
-      </div>
-    );
+    return <SignInCard authUser={authUser} authMessage={authMessage} onGoogleSignIn={onGoogleSignIn} />;
   }
 
   if (step === 1) {
-    return <SignInCard authUser={authUser} authMessage={authMessage} onGoogleSignIn={onGoogleSignIn} />;
+    return (
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Input
+          value={details.name}
+          onChange={(event) => onDetailsChange({ name: event.target.value })}
+          placeholder="Organization name"
+        />
+        <Input
+          value={details.email}
+          onChange={(event) => onDetailsChange({ email: event.target.value })}
+          placeholder="Official email"
+          type="email"
+        />
+        <Input
+          value={details.phone}
+          onChange={(event) => onDetailsChange({ phone: event.target.value })}
+          placeholder="Phone number"
+          type="tel"
+        />
+        <Input
+          value={details.representative}
+          onChange={(event) => onDetailsChange({ representative: event.target.value })}
+          placeholder="Representative name"
+        />
+        <Input
+          value={details.designation}
+          onChange={(event) => onDetailsChange({ designation: event.target.value })}
+          placeholder="Representative designation"
+        />
+        <Input
+          value={details.website}
+          onChange={(event) => onDetailsChange({ website: event.target.value })}
+          placeholder="Website"
+        />
+      </div>
+    );
   }
 
   if (step === 2) {
     return (
       <div className="grid gap-5 sm:grid-cols-2">
-        <Input placeholder="GST number" />
-        <Input placeholder="Business registration information" />
-        <Input placeholder="Founded year" />
-        <Input placeholder="Number of locations" />
+        <Input
+          value={details.gst}
+          onChange={(event) => onDetailsChange({ gst: event.target.value })}
+          placeholder="GST number"
+        />
+        <Input
+          value={details.registration}
+          onChange={(event) => onDetailsChange({ registration: event.target.value })}
+          placeholder="Business registration information"
+        />
+        <Input
+          value={details.foundedYear}
+          onChange={(event) => onDetailsChange({ foundedYear: event.target.value })}
+          placeholder="Founded year"
+        />
         <BlueSelect
+          value={details.orgType}
+          onChange={(value) => onDetailsChange({ orgType: value })}
           placeholder="Select organization type"
           ariaLabel="Organization type"
           options={[
@@ -799,27 +1244,40 @@ function InstituteStep({
   }
 
   if (step === 3) {
-    return <CheckboxGrid title="Institute services" items={services.map((service) => service.name)} />;
+    return (
+      <CheckboxGrid
+        title="Institute services"
+        items={services.map((service) => service.name)}
+        selected={selectedServices}
+        onToggle={onToggleService}
+      />
+    );
   }
 
   if (step === 4) {
-    return <OpeningHoursStep />;
+    return <OpeningHoursStep value={weeklyHours} onChange={onWeeklyHoursChange} />;
   }
 
-  return <LocationStep provider />;
+  return (
+    <LocationStep
+      provider
+      locationText={locationText}
+      onLocationTextChange={onLocationTextChange}
+      onLocationMetaChange={onLocationMetaChange}
+    />
+  );
 }
 
-function OpeningHoursStep() {
-  const days = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-  ];
-  const [closedDays, setClosedDays] = useState<string[]>(["Wednesday", "Sunday"]);
+function OpeningHoursStep({
+  value,
+  onChange,
+}: {
+  value: WeeklyHours;
+  onChange: (value: WeeklyHours) => void;
+}) {
+  const setDay = (day: string, hours: { open: string; close: string } | null) => {
+    onChange({ ...value, [day]: hours });
+  };
 
   return (
     <div className="space-y-4">
@@ -830,27 +1288,34 @@ function OpeningHoursStep() {
         </p>
       </div>
       <div className="grid gap-3">
-        {days.map((day) => {
-          const closed = closedDays.includes(day);
+        {DAY_KEYS.map((day) => {
+          const hours = value[day] ?? null;
+          const closed = !hours;
           return (
             <div key={day} className="grid gap-3 rounded-[12px] border border-slate-200 p-4 sm:grid-cols-[140px_1fr_auto] sm:items-center">
-              <p className="font-bold text-slate-950">{day}</p>
+              <p className="font-bold text-slate-950">{DAY_LABELS[day]}</p>
               {closed ? (
                 <p className="rounded-[8px] bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-500">Closed</p>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Input type="time" defaultValue="09:00" aria-label={`${day} opening time`} />
-                  <Input type="time" defaultValue="18:00" aria-label={`${day} closing time`} />
+                  <Input
+                    type="time"
+                    value={hours.open}
+                    aria-label={`${DAY_LABELS[day]} opening time`}
+                    onChange={(event) => setDay(day, { ...hours, open: event.target.value })}
+                  />
+                  <Input
+                    type="time"
+                    value={hours.close}
+                    aria-label={`${DAY_LABELS[day]} closing time`}
+                    onChange={(event) => setDay(day, { ...hours, close: event.target.value })}
+                  />
                 </div>
               )}
               <Button
                 variant="outline"
                 className="h-10"
-                onClick={() =>
-                  setClosedDays((current) =>
-                    current.includes(day) ? current.filter((item) => item !== day) : [...current, day],
-                  )
-                }
+                onClick={() => setDay(day, closed ? { open: "09:00", close: "18:00" } : null)}
               >
                 {closed ? "Mark open" : "Mark closed"}
               </Button>
@@ -862,31 +1327,35 @@ function OpeningHoursStep() {
   );
 }
 
-function CheckboxGrid({ title, items }: { title: string; items: string[] }) {
-  const [selectedItems, setSelectedItems] = useState(items.slice(0, 3));
-
+function CheckboxGrid({
+  title,
+  items,
+  selected,
+  onToggle,
+}: {
+  title: string;
+  items: string[];
+  selected: string[];
+  onToggle: (item: string) => void;
+}) {
   return (
     <div>
       <h3 className="text-lg font-bold">{title}</h3>
       <div className="mt-4 grid gap-3">
         {items.slice(0, 10).map((item) => {
-          const selected = selectedItems.includes(item);
+          const isSelected = selected.includes(item);
           return (
           <motion.button
             key={item}
             whileHover={{ y: -1 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() =>
-              setSelectedItems((current) =>
-                current.includes(item) ? current.filter((value) => value !== item) : [...current, item],
-              )
-            }
+            onClick={() => onToggle(item)}
             className={cn(
               "flex gap-3 rounded-[12px] border p-3 text-left text-sm transition",
-              selected ? "border-bluehope bg-blue-50" : "border-slate-200 bg-white",
+              isSelected ? "border-bluehope bg-blue-50" : "border-slate-200 bg-white",
             )}
           >
-            <span className={cn("h-4 w-4 rounded border", selected ? "border-bluehope bg-bluehope" : "border-slate-300")} />
+            <span className={cn("h-4 w-4 rounded border", isSelected ? "border-bluehope bg-bluehope" : "border-slate-300")} />
             {item}
           </motion.button>
           );

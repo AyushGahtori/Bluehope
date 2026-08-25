@@ -31,6 +31,30 @@ function db() {
   return firestore;
 }
 
+/** Compares Firestore timestamps / dates / ISO strings without throwing. */
+function compareTimestamps(
+  a: unknown,
+  b: unknown,
+): number {
+  const toMillis = (value: unknown): number => {
+    if (!value) return 0;
+    if (typeof value === "object" && "toMillis" in (value as object)) {
+      try {
+        return (value as { toMillis(): number }).toMillis();
+      } catch {
+        return 0;
+      }
+    }
+    if (typeof value === "object" && "seconds" in (value as object)) {
+      const { seconds, nanoseconds } = value as { seconds: number; nanoseconds?: number };
+      return seconds * 1000 + Math.floor((nanoseconds ?? 0) / 1e6);
+    }
+    const parsed = Date.parse(String(value));
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+  return toMillis(a) - toMillis(b);
+}
+
 type LocationInput = z.infer<typeof geoLocationSchema>;
 
 function toFirestoreLocation(location: LocationInput): FirestoreLocation {
@@ -467,23 +491,27 @@ export async function upsertProviderProfile(
  * Firebase UID on the server — never fetched in bulk and filtered client-side.
  */
 export async function listEnquiriesForProvider(uid: string, limit = 50) {
+  // Single-field filter + limit requires no composite index; sorting is done
+  // in memory so a missing index can never break the dashboard load.
   const snapshot = await db()
     .collection(COLLECTIONS.enquiries)
     .where("providerUid", "==", uid)
-    .orderBy("createdAt", "desc")
     .limit(limit)
     .get();
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  return snapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }) as { id: string } & Record<string, unknown>)
+    .sort((a, b) => compareTimestamps(b.createdAt, a.createdAt));
 }
 
 export async function listBookingsForProvider(uid: string, limit = 50) {
   const snapshot = await db()
     .collection(COLLECTIONS.bookings)
     .where("providerUid", "==", uid)
-    .orderBy("startsAt", "asc")
     .limit(limit)
     .get();
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  return snapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }) as { id: string } & Record<string, unknown>)
+    .sort((a, b) => compareTimestamps(a.startsAt, b.startsAt));
 }
 
 export async function listReviewsForProvider(uid: string, limit = 50) {
@@ -498,10 +526,11 @@ export async function listReviewsForProvider(uid: string, limit = 50) {
   const snapshot = await db()
     .collection(COLLECTIONS.reviews)
     .where("listingId", "==", providerProfile.listingId)
-    .orderBy("createdAt", "desc")
     .limit(limit)
     .get();
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  return snapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }) as { id: string } & Record<string, unknown>)
+    .sort((a, b) => compareTimestamps(b.createdAt, a.createdAt));
 }
 
 export async function softDeleteChildProfile(uid: string, childId: string) {

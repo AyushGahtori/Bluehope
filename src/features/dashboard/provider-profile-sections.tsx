@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Building2,
   Camera,
@@ -216,9 +216,14 @@ export function EditProfileSection({ ownerType }: { ownerType: "provider" | "ins
   const [profile, setProfile] = useState<ProfileShape>(EMPTY_PROFILE);
   const [loadState, setLoadState] = useState<"loading" | "ready">("loading");
   const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState("");
   const [uploading, setUploading] = useState(false);
   const [completion, setCompletion] = useState<number | undefined>(undefined);
+  const [feedback, setFeedback] = useState<{
+    tone: "success" | "error" | "info";
+    text: string;
+  } | null>(null);
+  const [feedbackVisible, setFeedbackVisible] = useState(false);
+  const feedbackTimers = useRef<number[]>([]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -283,16 +288,40 @@ export function EditProfileSection({ ownerType }: { ownerType: "provider" | "ins
     }
   };
 
+  const clearFeedbackTimers = () => {
+    for (const timer of feedbackTimers.current) window.clearTimeout(timer);
+    feedbackTimers.current = [];
+  };
+
+  /** Success feedback fades out after ~1s; errors stay until dismissed. */
+  const showFeedback = (tone: "success" | "error" | "info", text: string) => {
+    clearFeedbackTimers();
+    setFeedback({ tone, text });
+    setFeedbackVisible(true);
+    if (tone === "success") {
+      feedbackTimers.current.push(
+        window.setTimeout(() => setFeedbackVisible(false), 1000),
+        window.setTimeout(() => setFeedback(null), 1500),
+      );
+    }
+  };
+
+  const dismissFeedback = () => {
+    clearFeedbackTimers();
+    setFeedback(null);
+    setFeedbackVisible(false);
+  };
+
   const patchProfile = (patch: Partial<ProfileShape>) =>
     setProfile((current) => ({ ...current, ...patch }));
 
   const saveProfile = async () => {
     setSaving(true);
-    setSaveMessage("");
+    dismissFeedback();
     try {
       const headers = await authedApiHeaders();
       if (!headers) {
-        setSaveMessage("You need to be signed in to save. Please refresh and try again.");
+        showFeedback("error", "You need to be signed in to save. Please refresh and try again.");
         return;
       }
       const response = await fetch("/api/provider-profile", {
@@ -306,14 +335,16 @@ export function EditProfileSection({ ownerType }: { ownerType: "provider" | "ins
         if (data.profile?.profileCompleteness !== undefined) {
           setCompletion(data.profile.profileCompleteness);
         }
-        setSaveMessage("Changes saved.");
+        // Confirmation appears only after the database write succeeded and
+        // fades out automatically after about a second.
+        showFeedback("success", "Changes saved.");
       } else if (isConfigurationPendingResponse(response.status, body)) {
-        setSaveMessage("Saving is not available in this environment yet.");
+        showFeedback("error", "Saving is not available in this environment yet.");
       } else {
-        setSaveMessage("We couldn't save your changes. Please try again.");
+        showFeedback("error", "We couldn't save your changes. Please try again.");
       }
     } catch {
-      setSaveMessage("We couldn't save your changes. Please try again.");
+      showFeedback("error", "We couldn't save your changes. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -322,11 +353,11 @@ export function EditProfileSection({ ownerType }: { ownerType: "provider" | "ins
   const uploadImages = async (files: File[]) => {
     if (files.length === 0) return;
     setUploading(true);
-    setSaveMessage("");
+    dismissFeedback();
     try {
       const headers = await authedApiHeaders();
       if (!headers) {
-        setSaveMessage("You need to be signed in to upload photos.");
+        showFeedback("error", "You need to be signed in to upload photos.");
         return;
       }
       for (const file of files.slice(0, 12)) {
@@ -347,7 +378,7 @@ export function EditProfileSection({ ownerType }: { ownerType: "provider" | "ins
             setCompletion(data.profile.profileCompleteness);
           }
         } else if (!isConfigurationPendingResponse(response.status, body)) {
-          setSaveMessage("One or more photos couldn't be uploaded. Please try again.");
+          showFeedback("error", "One or more photos couldn't be uploaded. Please try again.");
         }
       }
     } finally {
@@ -361,14 +392,14 @@ export function EditProfileSection({ ownerType }: { ownerType: "provider" | "ins
 
   const captureBrowserLocation = () => {
     if (window.isSecureContext === false) {
-      setSaveMessage("Location requires HTTPS or localhost. Enter your address manually below.");
+      showFeedback("error", "Location requires HTTPS or localhost. Enter your address manually below.");
       return;
     }
     if (!navigator.geolocation) {
-      setSaveMessage("Location is not available in this browser. Enter your address manually below.");
+      showFeedback("error", "Location is not available in this browser. Enter your address manually below.");
       return;
     }
-    setSaveMessage("Getting your location…");
+    showFeedback("info", "Getting your location…");
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
@@ -381,15 +412,14 @@ export function EditProfileSection({ ownerType }: { ownerType: "provider" | "ins
             longitude,
           },
         });
-        setSaveMessage("Location captured from your device. Review the address text and adjust it if needed.");
+        showFeedback("success", "Location captured from your device. Review the address text and adjust it if needed.");
       },
       (error) => {
-        setSaveMessage(
+        showFeedback(
+          "error",
           error.code === error.PERMISSION_DENIED
             ? "Location permission was denied. Allow access in your browser site settings, try again, or enter your address manually."
-            : error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT
-              ? "We couldn't access your location. Please try again or enter your address manually."
-              : "We couldn't access your location. Please try again or enter your address manually.",
+            : "We couldn't access your location. Please try again or enter your address manually.",
         );
       },
       { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 },
@@ -448,7 +478,11 @@ export function EditProfileSection({ ownerType }: { ownerType: "provider" | "ins
           <button
             key={section.id}
             type="button"
-            onClick={() => setActiveSection(section.id)}
+            onClick={() => {
+              // Moving between sections resets any stale save feedback.
+              dismissFeedback();
+              setActiveSection(section.id);
+            }}
             className={cn(
               "rounded-full border px-4 py-2 text-sm font-semibold transition",
               activeSection === section.id
@@ -695,9 +729,20 @@ export function EditProfileSection({ ownerType }: { ownerType: "provider" | "ins
         ) : null}
       </Card>
 
-      {saveMessage ? (
-        <p className={cn("text-sm font-semibold", saveMessage === "Changes saved." ? "text-emerald-700" : "text-slate-600")}>
-          {saveMessage}
+      {feedback ? (
+        <p
+          role="status"
+          className={cn(
+            "text-sm font-semibold transition-opacity duration-500",
+            feedbackVisible ? "opacity-100" : "opacity-0",
+            feedback.tone === "success"
+              ? "text-emerald-700"
+              : feedback.tone === "error"
+                ? "text-rose-600"
+                : "text-slate-600",
+          )}
+        >
+          {feedback.text}
         </p>
       ) : null}
       {typeof completion === "number" ? (

@@ -1,6 +1,6 @@
 import "server-only";
 import type { NextRequest } from "next/server";
-import { getAdminAuth } from "@/server/firebase/admin";
+import { getAdminAuth, getAdminFirestore } from "@/server/firebase/admin";
 import type { AccountRole } from "@/models/firestore";
 
 export type AuthContext = {
@@ -28,7 +28,28 @@ export async function resolveAuthContext(request: NextRequest): Promise<AuthCont
     const token = authorization.slice("Bearer ".length);
     const decodedToken = await adminAuth.verifyIdToken(token, true);
     const roleClaim = decodedToken.role;
-    const role = typeof roleClaim === "string" ? (roleClaim as AccountRole) : undefined;
+    let role = typeof roleClaim === "string" ? (roleClaim as AccountRole) : undefined;
+
+    if (!role) {
+      // The primary role lives in users/{uid}. Fresh tokens do not carry a
+      // role custom claim yet, so resolve it server-side from the account
+      // document and cache it as a claim for future tokens.
+      try {
+        const firestore = getAdminFirestore();
+        if (firestore) {
+          const snapshot = await firestore.collection("users").doc(decodedToken.uid).get();
+          const storedRole = snapshot.exists ? snapshot.data()?.role : undefined;
+          if (typeof storedRole === "string" && storedRole.length > 0) {
+            role = storedRole as AccountRole;
+            await adminAuth
+              .setCustomUserClaims(decodedToken.uid, { role: storedRole })
+              .catch(() => undefined);
+          }
+        }
+      } catch {
+        // Role resolution is best-effort; the request continues unprivileged.
+      }
+    }
 
     return {
       authenticated: true,

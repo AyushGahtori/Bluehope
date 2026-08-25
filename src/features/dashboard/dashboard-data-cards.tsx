@@ -283,11 +283,36 @@ export function UpcomingAppointmentsCard({
         : [],
   );
 
+  // Demo/development environments merge the demo appointment dataset with the
+  // authenticated account's real Firestore appointments (deduped, sorted).
+  // Production builds show only real account data.
+  const includeDemoData =
+    isDemoSession() || process.env.NODE_ENV !== "production";
+
   const today = new Date().toISOString().slice(0, 10);
-  const upcoming = items
+  const seen = new Set<string>();
+  const merged: Array<AppointmentItem & { isDemo?: boolean }> = [];
+  if (includeDemoData) {
+    for (const appointment of demoAppointments) {
+      if (seen.has(appointment.id)) continue;
+      seen.add(appointment.id);
+      merged.push({ ...appointment, isDemo: true });
+    }
+  }
+  for (const appointment of items) {
+    if (seen.has(appointment.id)) continue;
+    seen.add(appointment.id);
+    merged.push(appointment);
+  }
+
+  const upcoming = merged
     .filter((item) => !item.date || item.date >= today)
     .filter((item) => item.status !== "cancelled")
-    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    .sort(
+      (a, b) =>
+        (a.date || "").localeCompare(b.date || "") ||
+        (a.time || "").localeCompare(b.time || ""),
+    );
 
   return (
     <SectionShell
@@ -299,31 +324,6 @@ export function UpcomingAppointmentsCard({
         <LoadingRows />
       ) : state === "error" ? (
         <ErrorState onRetry={reload} />
-      ) : demo && upcoming.length === 0 && demoAppointments.length > 0 ? (
-        <ul className="space-y-3">
-          {demoAppointments.slice(0, 2).map((appointment) => (
-            <li
-              key={appointment.id}
-              className="flex items-center gap-4 rounded-[8px] bg-slate-50 px-4 py-3"
-            >
-              <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-[8px] bg-white text-center">
-                <span className="text-[10px] font-bold uppercase text-slate-500">
-                  {formatAppointmentDate(appointment.date)?.split(" ")[0]}
-                </span>
-                <span className="text-sm font-extrabold text-slate-900">
-                  {formatAppointmentDate(appointment.date)?.split(" ")[1]}
-                </span>
-              </div>
-              <div>
-                <p className="font-semibold text-slate-900">
-                  {appointment.serviceId}
-                </p>
-                <p className="text-sm text-slate-500">{appointment.time}</p>
-              </div>
-              <Badge tone="green">Demo</Badge>
-            </li>
-          ))}
-        </ul>
       ) : upcoming.length === 0 ? (
         <EmptyState
           message="You don't have any upcoming appointments."
@@ -357,9 +357,15 @@ export function UpcomingAppointmentsCard({
                   </p>
                   <p className="text-sm text-slate-500">{appointment.time}</p>
                 </div>
-                <Badge tone={tone} className={cn("ml-auto")}>
-                  {label}
-                </Badge>
+                {appointment.isDemo ? (
+                  <Badge tone="green" className={cn("ml-auto")}>
+                    Demo
+                  </Badge>
+                ) : (
+                  <Badge tone={tone} className={cn("ml-auto")}>
+                    {label}
+                  </Badge>
+                )}
               </li>
             );
           })}
