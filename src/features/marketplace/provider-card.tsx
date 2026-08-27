@@ -27,6 +27,9 @@ export function ProviderCard({ provider }: { provider: ProviderSummary }) {
         <Link href={href} className="text-xl font-extrabold text-slate-950 hover:text-bluehope">
           {provider.name}
         </Link>
+        <span className="ml-2 align-middle text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {provider.providerType === "institute" ? "Institute" : "Sole Provider"}
+        </span>
         <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
           <span className="inline-flex items-center gap-1 text-amber-500">
             <Star className="h-4 w-4 fill-current" />

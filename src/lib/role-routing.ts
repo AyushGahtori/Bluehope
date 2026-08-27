@@ -43,9 +43,16 @@ export function dashboardHomeFor(role: DashboardRole): string {
 
 /**
  * Parses a /dashboard/{role}/... pathname and returns the role segment, or
- * null when the path is not a role dashboard route.
+ * null when the path is not a role dashboard route. Accepts both the route
+ * segment spellings used across the app ("institute" URLs, "institution"
+ * canonical role) so guards never misclassify an institute dashboard.
  */
 export function dashboardRoleFromPath(pathname: string): DashboardRole | null {
-  const match = /^\/dashboard\/(parent|provider|institution|admin)(?:\/|$)/.exec(pathname);
-  return match ? (match[1] as DashboardRole) : null;
+  const match = /^\/dashboard\/(parent|provider|institute|institution|admin)(?:\/|$)/.exec(
+    pathname,
+  );
+  if (!match) return null;
+  const segment = match[1];
+  if (segment === "institute" || segment === "institution") return "institution";
+  return segment as DashboardRole;
 }

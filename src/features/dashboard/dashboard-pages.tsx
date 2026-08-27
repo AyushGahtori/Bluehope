@@ -1,10 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Eye, PlusCircle, Star, Users, CheckCircle2, HeartPulse } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Eye,
+  PlusCircle,
+  Star,
+  Users,
+  CheckCircle2,
+  HeartPulse,
+} from "lucide-react";
 import Link from "next/link";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { Badge, Card, LinkButton, SectionTitle } from "@/components/ui/primitives";
+import {
+  Badge,
+  Card,
+  LinkButton,
+  SectionTitle,
+} from "@/components/ui/primitives";
 import { demoAppointments, demoEnquiries } from "@/data/demo";
 import { CommunityPreferences } from "@/features/dashboard/community-preferences";
 import { UserGreeting } from "@/features/dashboard/user-greeting";
@@ -13,14 +25,20 @@ import {
   ReviewsSummaryCard,
   UpcomingAppointmentsCard,
 } from "@/features/dashboard/dashboard-data-cards";
-import { EmptyProfileState, ProfilePreview } from "@/features/dashboard/profile-preview";
-import { authedApiHeaders, isConfigurationPendingResponse } from "@/lib/api-client";
+import {
+  EmptyProfileState,
+  ProfilePreview,
+} from "@/features/dashboard/profile-preview";
+import {
+  authedApiHeaders,
+  isConfigurationPendingResponse,
+} from "@/lib/api-client";
 import { useStoredAuthUser } from "@/lib/auth-user-store";
 import { cn } from "@/lib/utils";
 
 const parentNav = [
   "Dashboard",
-  "Search Support",
+  "Search",
   "Saved Providers",
   "My Enquiries",
   "Appointments",
@@ -92,33 +110,39 @@ function useOwnProfile() {
   const [state, setState] = useState<"loading" | "ready">("loading");
   const [profile, setProfile] = useState<ProfileData | null>(null);
 
-  const load = useCallback(async () => {
-    const headers = await authedApiHeaders();
-    setState("loading");
-    if (!headers) {
-      setProfile(null);
-      setState("ready");
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/provider-profile", { headers, cache: "no-store" });
-      const body: unknown = await response.json().catch(() => null);
-      if (response.ok && body && typeof body === "object") {
-        const data = body as { profile?: ProfileData | null };
-        setProfile(data.profile ?? null);
-      } else if (isConfigurationPendingResponse(response.status, body)) {
-        setProfile(null);
-      }
-    } catch {
-      setProfile(null);
-    }
-    setState("ready");
-  }, []);
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    let ignore = false;
+
+    authedApiHeaders().then((headers) => {
+      if (ignore) return;
+      if (!headers) {
+        setProfile(null);
+        setState("ready");
+        return;
+      }
+      fetch("/api/provider-profile", { headers, cache: "no-store" })
+        .then((response) => response.json().catch(() => null))
+        .then((body: unknown) => {
+          if (ignore) return;
+          if (body && typeof body === "object") {
+            const data = body as { profile?: ProfileData | null };
+            setProfile(data.profile ?? null);
+          } else {
+            setProfile(null);
+          }
+          setState("ready");
+        })
+        .catch(() => {
+          if (ignore) return;
+          setProfile(null);
+          setState("ready");
+        });
+    });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   return { state, profile };
 }
@@ -135,9 +159,13 @@ const DAY_LABELS: Record<string, string> = {
 
 function todayHoursLabel(profile: ProfileData | null) {
   if (!profile) return undefined;
-  const dayKey = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date().getDay()];
+  const dayKey = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][
+    new Date().getDay()
+  ];
   const entry = profile.weeklyHours?.[dayKey];
-  return entry ? `${DAY_LABELS[dayKey]} ${entry.open}–${entry.close}` : undefined;
+  return entry
+    ? `${DAY_LABELS[dayKey]} ${entry.open}–${entry.close}`
+    : undefined;
 }
 
 /**
@@ -173,17 +201,25 @@ function ProviderDashboardBody({
     <>
       <h1 className="text-3xl font-extrabold text-slate-950">Your Profile</h1>
       <p className="mt-2 text-slate-600">
-        This is how families see {role === "institution" ? "your organization" : "you"} on BlueHope. Keep it complete
-        and current.
+        This is how families see{" "}
+        {role === "institution" ? "your organization" : "you"} on BlueHope. Keep
+        it complete and current.
       </p>
       <div className="mt-6 space-y-6">
         {state === "loading" ? (
-          <div className="h-72 animate-pulse rounded-[8px] bg-slate-100" aria-busy="true" />
+          <div
+            className="h-72 animate-pulse rounded-[8px] bg-slate-100"
+            aria-busy="true"
+          />
         ) : complete && profile ? (
           <ProfilePreview
             data={{
               name: displayName,
-              tagline: profile.tagline || (role === "institution" ? "Child development center" : "Independent provider"),
+              tagline:
+                profile.tagline ||
+                (role === "institution"
+                  ? "Child development center"
+                  : "Independent provider"),
               bio: profile.bio || undefined,
               images: profile.images,
               services: profile.services,
@@ -208,7 +244,10 @@ function ProviderDashboardBody({
           />
         )}
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.9fr_0.75fr]">
-          <RecentEnquiriesCard viewAllHref={enquiriesHref} demoEnquiries={demoEnquiries} />
+          <RecentEnquiriesCard
+            viewAllHref={enquiriesHref}
+            demoEnquiries={demoEnquiries}
+          />
           <UpcomingAppointmentsCard
             viewAllHref={appointmentsHref}
             demoAppointments={demoAppointments.map((appointment, index) => ({
@@ -219,7 +258,10 @@ function ProviderDashboardBody({
               status: "confirmed",
             }))}
           />
-          <ProfileStatus missingItems={profile?.missingItems ?? []} verifyHref={verifyHref} />
+          <ProfileStatus
+            missingItems={profile?.missingItems ?? []}
+            verifyHref={verifyHref}
+          />
         </div>
         <ReviewsSummaryCard viewAllHref={reviewsHref} />
       </div>
@@ -229,7 +271,11 @@ function ProviderDashboardBody({
 
 export function ProviderDashboard() {
   return (
-    <DashboardShell nav={providerNav} roleLabel="Dr. Priya Sharma" role="provider">
+    <DashboardShell
+      nav={providerNav}
+      roleLabel="Dr. Priya Sharma"
+      role="provider"
+    >
       <ProviderDashboardBody
         role="provider"
         fallbackName="Your Practice"
@@ -245,7 +291,11 @@ export function ProviderDashboard() {
 
 export function InstituteDashboard() {
   return (
-    <DashboardShell nav={instituteNav} roleLabel="Institute User" role="institution">
+    <DashboardShell
+      nav={instituteNav}
+      roleLabel="Institute User"
+      role="institution"
+    >
       <ProviderDashboardBody
         role="institution"
         fallbackName="Your Organization"
@@ -266,28 +316,52 @@ export function ParentDashboard() {
         <Card className="bg-soft-blue p-8">
           <UserGreeting fallback="Welcome back!" />
           <p className="mt-4 max-w-xl text-lg text-slate-600">
-            We are here to help you find the right support for your child and their unique needs.
+            We are here to help you find the right support for your child and
+            their unique needs.
           </p>
           <div className="mt-7 grid gap-4 sm:grid-cols-3">
             <div className="rounded-[8px] bg-white p-4">
-              <p className="text-sm font-semibold text-slate-500">Active child context</p>
-              <p className="mt-1 text-lg font-bold text-slate-950">Aarav · Speech support</p>
+              <p className="text-sm font-semibold text-slate-500">
+                Active child context
+              </p>
+              <p className="mt-1 text-lg font-bold text-slate-950">
+                Aarav · Speech support
+              </p>
             </div>
             <div className="rounded-[8px] bg-white p-4">
-              <p className="text-sm font-semibold text-slate-500">Recommended next step</p>
-              <p className="mt-1 text-lg font-bold text-slate-950">Compare 6 nearby therapists</p>
+              <p className="text-sm font-semibold text-slate-500">
+                Recommended next step
+              </p>
+              <p className="mt-1 text-lg font-bold text-slate-950">
+                Compare 6 nearby therapists
+              </p>
             </div>
             <div className="rounded-[8px] bg-white p-4">
-              <p className="text-sm font-semibold text-slate-500">Marketplace loop</p>
-              <p className="mt-1 text-lg font-bold text-slate-950">Contact · Book · Review</p>
+              <p className="text-sm font-semibold text-slate-500">
+                Marketplace loop
+              </p>
+              <p className="mt-1 text-lg font-bold text-slate-950">
+                Contact · Book · Review
+              </p>
             </div>
           </div>
-          <LinkButton href="/search" className="mt-6" variant="outline">
+          <LinkButton
+            href="/dashboard/parent/search"
+            className="mt-6"
+            variant="outline"
+          >
             Search support
           </LinkButton>
         </Card>
         <Card className="p-6">
-          <SectionTitle title="Your Children" action={<LinkButton href="#" variant="ghost">View all</LinkButton>} />
+          <SectionTitle
+            title="Your Children"
+            action={
+              <LinkButton href="#" variant="ghost">
+                View all
+              </LinkButton>
+            }
+          />
           <div className="flex items-center gap-4 rounded-[8px] border border-slate-200 p-4">
             <span className="h-16 w-16 rounded-full bg-slate-200" />
             <div>
@@ -311,12 +385,18 @@ export function ParentDashboard() {
           }))}
         />
         <Card className="p-6">
-          <SectionTitle title="Parent Community" action={<Badge tone="neutral">Optional</Badge>} />
+          <SectionTitle
+            title="Parent Community"
+            action={<Badge tone="neutral">Optional</Badge>}
+          />
           <div className="rounded-[8px] bg-soft-blue p-5">
-            <p className="text-lg font-bold text-bluehope">Connect with parents who understand a similar journey.</p>
+            <p className="text-lg font-bold text-bluehope">
+              Connect with parents who understand a similar journey.
+            </p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Community matching is a future moderated feature. These preferences only tell BlueHope what you would
-              like to hear about when it is ready.
+              Community matching is a future moderated feature. These
+              preferences only tell BlueHope what you would like to hear about
+              when it is ready.
             </p>
           </div>
           <CommunityPreferences />
@@ -329,8 +409,12 @@ export function ParentDashboard() {
 export function AdminDashboard() {
   return (
     <DashboardShell nav={adminNav} roleLabel="Admin User" role="admin">
-      <h1 className="text-3xl font-extrabold text-slate-950">Welcome back, Admin!</h1>
-      <p className="mt-2 text-slate-600">Here is what is happening across BlueHope.</p>
+      <h1 className="text-3xl font-extrabold text-slate-950">
+        Welcome back, Admin!
+      </h1>
+      <p className="mt-2 text-slate-600">
+        Here is what is happening across BlueHope.
+      </p>
       <MetricGrid
         items={[
           ["Total Users", "2568", Users],
@@ -342,12 +426,22 @@ export function AdminDashboard() {
       />
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.95fr_0.65fr]">
         <Card className="p-6">
-          <SectionTitle title="Enquiries Overview" action={<Badge tone="neutral">Last 7 days</Badge>} />
+          <SectionTitle
+            title="Enquiries Overview"
+            action={<Badge tone="neutral">Last 7 days</Badge>}
+          />
           <div className="h-72 rounded-[8px] bg-[linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[length:100%_48px]" />
         </Card>
         <AdminEnquiryCard />
         <Card className="p-6">
-          <SectionTitle title="User registration" action={<LinkButton href="#" variant="ghost">View all</LinkButton>} />
+          <SectionTitle
+            title="User registration"
+            action={
+              <LinkButton href="#" variant="ghost">
+                View all
+              </LinkButton>
+            }
+          />
           <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-full border-[18px] border-bluehope text-center">
             <span>
               <b>2568</b>
@@ -364,17 +458,50 @@ export function AdminDashboard() {
 function QuickAccess() {
   return (
     <section className="mt-7">
-      <SectionTitle title="Quick Access" action={<LinkButton href="/search" variant="ghost">View all categories</LinkButton>} />
+      <SectionTitle
+        title="Quick Access"
+        action={
+          <LinkButton href="/dashboard/parent/search" variant="ghost">
+            View all categories
+          </LinkButton>
+        }
+      />
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         {[
-          ["Therapist", "Find services and providers", "bg-blue-50 text-bluehope", "/search?service=speech-therapy&radius=20"],
-          ["Near Me", "Find services and providers", "bg-emerald-50 text-emerald-600", "/search?radius=10"],
-          ["School", "Find services and providers", "bg-rose-50 text-rose-500", "/search?service=special-education&radius=20"],
-          ["Doctor", "Find services and providers", "bg-amber-50 text-amber-600", "/search?service=psychological-services&radius=20"],
+          [
+            "Therapist",
+            "Find services and providers",
+            "bg-blue-50 text-bluehope",
+            "/dashboard/parent/search?service=speech-therapy&radius=20",
+          ],
+          [
+            "Near Me",
+            "Find services and providers",
+            "bg-emerald-50 text-emerald-600",
+            "/dashboard/parent/search?radius=10",
+          ],
+          [
+            "School",
+            "Find services and providers",
+            "bg-rose-50 text-rose-500",
+            "/dashboard/parent/search?service=special-education&radius=20",
+          ],
+          [
+            "Doctor",
+            "Find services and providers",
+            "bg-amber-50 text-amber-600",
+            "/dashboard/parent/search?service=psychological-services&radius=20",
+          ],
         ].map(([title, text, tone, href]) => (
-          <Link key={title} href={href} className="block transition hover:-translate-y-0.5">
+          <Link
+            key={title}
+            href={href}
+            className="block transition hover:-translate-y-0.5"
+          >
             <Card className="flex items-center gap-5 p-6">
-              <span className={`flex h-20 w-20 items-center justify-center rounded-[8px] ${tone}`}>
+              <span
+                className={`flex h-20 w-20 items-center justify-center rounded-[8px] ${tone}`}
+              >
                 <PlusCircle className="h-9 w-9" />
               </span>
               <div>
@@ -389,12 +516,22 @@ function QuickAccess() {
   );
 }
 
-function MetricGrid({ items }: { items: Array<[string, string, typeof Users]> }) {
+function MetricGrid({
+  items,
+}: {
+  items: Array<[string, string, typeof Users]>;
+}) {
   return (
     <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
       {items.map(([label, value, Icon], index) => (
         <Card key={label} className="flex items-center gap-5 bg-slate-50 p-6">
-          <span className={index % 2 ? "rounded-full bg-emerald-100 p-4 text-emerald-600" : "rounded-full bg-blue-100 p-4 text-bluehope"}>
+          <span
+            className={
+              index % 2
+                ? "rounded-full bg-emerald-100 p-4 text-emerald-600"
+                : "rounded-full bg-blue-100 p-4 text-bluehope"
+            }
+          >
             <Icon className="h-8 w-8" />
           </span>
           <div>
@@ -412,9 +549,19 @@ function MetricGrid({ items }: { items: Array<[string, string, typeof Users]> })
 function AdminEnquiryCard() {
   return (
     <Card className="p-6">
-      <SectionTitle title="Recent Enquiries" action={<LinkButton href="/dashboard/admin/enquiries" variant="ghost">View all</LinkButton>} />
+      <SectionTitle
+        title="Recent Enquiries"
+        action={
+          <LinkButton href="/dashboard/admin/enquiries" variant="ghost">
+            View all
+          </LinkButton>
+        }
+      />
       {demoEnquiries.map((enquiry, index) => (
-        <div key={enquiry.id} className="flex items-center justify-between border-b border-slate-100 py-4 last:border-0">
+        <div
+          key={enquiry.id}
+          className="flex items-center justify-between border-b border-slate-100 py-4 last:border-0"
+        >
           <div className="flex items-center gap-4">
             <span className="h-12 w-12 rounded-full bg-purple-100" />
             <div>
@@ -422,7 +569,9 @@ function AdminEnquiryCard() {
               <p className="text-sm text-slate-600">{enquiry.message}</p>
             </div>
           </div>
-          <Badge tone={index === 0 ? "amber" : "green"}>{index === 0 ? "New" : "Requested"}</Badge>
+          <Badge tone={index === 0 ? "amber" : "green"}>
+            {index === 0 ? "New" : "Requested"}
+          </Badge>
         </div>
       ))}
     </Card>
@@ -434,10 +583,19 @@ function AdminEnquiryCard() {
  * incomplete-profile warning disappears once every required section is done,
  * while Edit Profile remains permanently available in the sidebar.
  */
-function ProfileStatus({ missingItems, verifyHref }: { missingItems: string[]; verifyHref: string }) {
+function ProfileStatus({
+  missingItems,
+  verifyHref,
+}: {
+  missingItems: string[];
+  verifyHref: string;
+}) {
   return (
     <Card className="p-6">
-      <SectionTitle title="Next Steps" action={<Badge tone="amber">Not Verified</Badge>} />
+      <SectionTitle
+        title="Next Steps"
+        action={<Badge tone="amber">Not Verified</Badge>}
+      />
       <div className="space-y-3 text-sm text-slate-600">
         {missingItems.length === 0 ? (
           <p className="flex items-center gap-2">
@@ -459,7 +617,11 @@ function ProfileStatus({ missingItems, verifyHref }: { missingItems: string[]; v
           </>
         )}
       </div>
-      <LinkButton href={verifyHref} variant="outline" className={cn("mt-6 w-full")}>
+      <LinkButton
+        href={verifyHref}
+        variant="outline"
+        className={cn("mt-6 w-full")}
+      >
         Verification status
       </LinkButton>
     </Card>

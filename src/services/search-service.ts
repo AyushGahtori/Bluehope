@@ -1,5 +1,6 @@
 import { conditions, services } from "@/data/taxonomy";
 import { demoProviders } from "@/data/demo";
+import { listDiscoverableListings } from "@/server/firestore/repositories";
 import type { ProviderSummary } from "@/types/domain";
 
 export type SearchParams = {
@@ -45,6 +46,7 @@ function textForProvider(provider: ProviderSummary) {
       conditionText,
       provider.location.city,
       provider.location.locality,
+      provider.location.formattedAddress,
       provider.languages.join(" "),
     ].join(" "),
   );
@@ -85,14 +87,14 @@ function relevanceScore(provider: ProviderSummary, params: SearchParams): number
   if (params.condition && provider.conditions.includes(params.condition)) score += 44;
   if (params.age && ageGroupMatches(provider.ageGroups, Number(params.age))) score += 18;
 
-  // Structured location intent ("Andheri West") prioritizes matching areas
-  // without hiding the rest when the demo dataset is area-limited.
+  // Structured location intent ("Haldwani") prioritizes matching areas without
+  // hiding the rest — location boosts ranking, it never filters by itself.
   const locationTokens = tokenize(params.location).filter(
     (token) => token !== "near" && token !== "me",
   );
   if (locationTokens.length) {
     const areaTokens = new Set(
-      tokenize(`${provider.location.locality} ${provider.location.city}`),
+      tokenize(`${provider.location.locality} ${provider.location.city} ${provider.location.formattedAddress}`),
     );
     if (locationTokens.some((token) => areaTokens.has(token))) score += 20;
   }
@@ -104,19 +106,114 @@ function relevanceScore(provider: ProviderSummary, params: SearchParams): number
   return score;
 }
 
-export function searchProviders(params: SearchParams) {
-  const radius = params.radius ?? 20;
+/** Great-circle distance in kilometres between two coordinates. */
+function haversineKm(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+type Origin = { latitude: number; longitude: number };
+
+const geocodeCache = new Map<string, Origin | null>();
+
+/**
+ * Resolves a free-text location to coordinates for radius filtering.
+ * Uses OpenStreetMap Nominatim (no API key) with a short timeout and an
+ * in-memory cache. Fails open (null) — a failed lookup must never hide
+ * listings; the caller then skips radius filtering entirely.
+ */
+async function resolveOrigin(locationText?: string): Promise<Origin | null> {
+  const text = locationText?.trim();
+  if (!text) return null;
+  if (geocodeCache.has(text)) return geocodeCache.get(text) ?? null;
+
+  let origin: Origin | null = null;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=in&q=${encodeURIComponent(text)}`;
+    const response = await fetch(url, {
+      headers: { "User-Agent": "BlueHope-Dev/0.1 (testing)" },
+      signal: AbortSignal.timeout(2500),
+    });
+    if (response.ok) {
+      const data = (await response.json()) as Array<{ lat: string; lon: string }>;
+      const hit = data[0];
+      if (hit) {
+        const latitude = Number(hit.lat);
+        const longitude = Number(hit.lon);
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+          origin = { latitude, longitude };
+        }
+      }
+    }
+  } catch {
+    // Fail open: no origin means radius filtering is skipped, not an error.
+  }
+
+  geocodeCache.set(text, origin);
+  return origin;
+}
+
+/**
+ * Loads every discoverable listing: real registered providers/institutes from
+ * Firestore merged with the development demo dataset. Real listings win on
+ * slug collisions so a registered institute is never shadowed by demo data.
+ * Firestore being unavailable degrades to demo-only instead of failing search.
+ */
+async function loadAllListings(): Promise<ProviderSummary[]> {
+  let realListings: ProviderSummary[] = [];
+  try {
+    realListings = await listDiscoverableListings();
+  } catch {
+    realListings = [];
+  }
+
+  const seen = new Set(realListings.map((listing) => listing.slug));
+  const demo = demoProviders.filter((provider) => !seen.has(provider.slug));
+  return [...realListings, ...demo];
+}
+
+export async function searchProviders(params: SearchParams) {
   const page = Math.max(params.page ?? 1, 1);
   const limit = Math.min(Math.max(params.limit ?? 12, 1), 50);
 
-  const filtered = demoProviders
+  const all = await loadAllListings();
+
+  // Radius filtering is strictly opt-in: without an explicit radius every
+  // India-wide listing is discoverable (testing-phase behavior). When a radius
+  // is set, distances are recomputed from the geocoded search location; if the
+  // location cannot be resolved, radius filtering is skipped rather than
+  // guessing or crashing.
+  let candidates = all;
+  if (params.radius !== undefined) {
+    const origin = await resolveOrigin(params.location);
+    if (origin) {
+      candidates = all
+        .map((provider) => {
+          const [longitude, latitude] = provider.location.coordinates.coordinates;
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return provider;
+          const distanceKm = haversineKm(origin, { latitude, longitude });
+          return { ...provider, distanceKm };
+        })
+        .filter((provider) => (provider.distanceKm ?? Infinity) <= params.radius!);
+    }
+  }
+
+  const filtered = candidates
     .filter((provider) => !params.providerType || provider.providerType === params.providerType)
     .filter((provider) => !params.service || provider.services.includes(params.service))
     .filter((provider) => !params.condition || provider.conditions.includes(params.condition))
     .filter((provider) => !params.language || provider.languages.includes(params.language))
     .filter((provider) => !params.online || provider.modes.includes("online"))
     .filter((provider) => !params.homeVisit || provider.modes.includes("home_visit"))
-    .filter((provider) => provider.distanceKm === undefined || provider.distanceKm <= radius)
     .map((provider) => ({ provider, score: relevanceScore(provider, params) }))
     .filter((result) => result.score !== null);
 

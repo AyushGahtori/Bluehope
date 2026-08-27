@@ -16,7 +16,9 @@ import {
   geoLocationSchema,
   upsertUserSchema,
 } from "@/models/validation";
+import { slugify } from "@/lib/utils";
 import { getAdminFirestore } from "@/server/firebase/admin";
+import type { ProviderSummary } from "@/types/domain";
 import type { z } from "zod";
 
 export class FirestoreUnavailableError extends Error {
@@ -32,10 +34,7 @@ function db() {
 }
 
 /** Compares Firestore timestamps / dates / ISO strings without throwing. */
-function compareTimestamps(
-  a: unknown,
-  b: unknown,
-): number {
+function compareTimestamps(a: unknown, b: unknown): number {
   const toMillis = (value: unknown): number => {
     if (!value) return 0;
     if (typeof value === "object" && "toMillis" in (value as object)) {
@@ -46,7 +45,10 @@ function compareTimestamps(
       }
     }
     if (typeof value === "object" && "seconds" in (value as object)) {
-      const { seconds, nanoseconds } = value as { seconds: number; nanoseconds?: number };
+      const { seconds, nanoseconds } = value as {
+        seconds: number;
+        nanoseconds?: number;
+      };
       return seconds * 1000 + Math.floor((nanoseconds ?? 0) / 1e6);
     }
     const parsed = Date.parse(String(value));
@@ -70,7 +72,9 @@ function toFirestoreLocation(location: LocationInput): FirestoreLocation {
   };
 }
 
-function publicUserData(data?: FirebaseFirestore.DocumentData): Partial<UserDocument> | null {
+function publicUserData(
+  data?: FirebaseFirestore.DocumentData,
+): Partial<UserDocument> | null {
   if (!data) return null;
 
   return {
@@ -210,17 +214,25 @@ export async function establishUserRole(
       ...(profile.email !== undefined ? { email: profile.email } : {}),
       ...(profile.displayName ? { displayName: profile.displayName } : {}),
       ...(profile.photoURL ? { photoURL: profile.photoURL } : {}),
-      ...(profile.providerIds?.length ? { authProvider: profile.providerIds } : {}),
+      ...(profile.providerIds?.length
+        ? { authProvider: profile.providerIds }
+        : {}),
       updatedAt: now,
       lastLoginAt: now,
     },
     { merge: true },
   );
-  return { status: "existing", role: (existingRole ?? role) as SelfServeAccountRole };
+  return {
+    status: "existing",
+    role: (existingRole ?? role) as SelfServeAccountRole,
+  };
 }
 
 export async function getCustomerProfile(uid: string) {
-  const snapshot = await db().collection(COLLECTIONS.customerProfiles).doc(uid).get();
+  const snapshot = await db()
+    .collection(COLLECTIONS.customerProfiles)
+    .doc(uid)
+    .get();
   return snapshot.exists ? (snapshot.data() as CustomerProfileDocument) : null;
 }
 
@@ -302,7 +314,10 @@ export async function createChildProfile(uid: string, body: unknown) {
 }
 
 export async function getChildProfile(uid: string, childId: string) {
-  const snapshot = await db().collection(COLLECTIONS.childProfiles).doc(childId).get();
+  const snapshot = await db()
+    .collection(COLLECTIONS.childProfiles)
+    .doc(childId)
+    .get();
   if (!snapshot.exists) return null;
 
   const child = snapshot.data() as ChildProfileDocument;
@@ -310,7 +325,11 @@ export async function getChildProfile(uid: string, childId: string) {
   return child;
 }
 
-export async function updateChildProfile(uid: string, childId: string, body: unknown) {
+export async function updateChildProfile(
+  uid: string,
+  childId: string,
+  body: unknown,
+) {
   const existing = await getChildProfile(uid, childId);
   if (!existing) return null;
 
@@ -324,9 +343,12 @@ export async function updateChildProfile(uid: string, childId: string, body: unk
     ...(parsed.conditionIds || parsed.preferredServiceIds || parsed.ageBand
       ? {
           recommendationProfile: {
-            serviceIds: parsed.preferredServiceIds ?? existing.preferredServiceIds,
+            serviceIds:
+              parsed.preferredServiceIds ?? existing.preferredServiceIds,
             conditionIds: parsed.conditionIds ?? existing.conditionIds,
-            ageGroups: parsed.ageBand ? [parsed.ageBand] : existing.recommendationProfile.ageGroups,
+            ageGroups: parsed.ageBand
+              ? [parsed.ageBand]
+              : existing.recommendationProfile.ageGroups,
             languageIds: existing.recommendationProfile.languageIds,
           },
         }
@@ -334,7 +356,10 @@ export async function updateChildProfile(uid: string, childId: string, body: unk
     updatedAt: FieldValue.serverTimestamp(),
   };
 
-  await db().collection(COLLECTIONS.childProfiles).doc(childId).set(payload, { merge: true });
+  await db()
+    .collection(COLLECTIONS.childProfiles)
+    .doc(childId)
+    .set(payload, { merge: true });
   return getChildProfile(uid, childId);
 }
 
@@ -361,7 +386,12 @@ export type ProviderProfileView = {
   } | null;
   pricing: { minFee: string; maxFee: string; sessionLabel: string };
   contact: { phone: string; email: string; whatsapp: string };
-  details: { officialName: string; foundedYear: string; registrationNumber: string; website: string };
+  details: {
+    officialName: string;
+    foundedYear: string;
+    registrationNumber: string;
+    website: string;
+  };
   profileCompleteness: number;
   missingItems: string[];
   createdAt?: unknown;
@@ -370,18 +400,39 @@ export type ProviderProfileView = {
 
 /** Sections that define profile completion. Optional features (Q&A,
  * verification) intentionally do not count toward basic completion. */
-const COMPLETION_SECTIONS: Array<{ key: string; label: string; isComplete: (p: ProviderProfileView) => boolean }> = [
-  { key: "name", label: "Basic info", isComplete: (p) => p.name.trim().length > 0 },
+const COMPLETION_SECTIONS: Array<{
+  key: string;
+  label: string;
+  isComplete: (p: ProviderProfileView) => boolean;
+}> = [
+  {
+    key: "name",
+    label: "Basic info",
+    isComplete: (p) => p.name.trim().length > 0,
+  },
   { key: "images", label: "Photos", isComplete: (p) => p.images.length > 0 },
   { key: "bio", label: "Bio", isComplete: (p) => p.bio.trim().length >= 80 },
-  { key: "services", label: "Services", isComplete: (p) => p.services.length > 0 },
-  { key: "conditions", label: "Conditions", isComplete: (p) => p.conditions.length > 0 },
+  {
+    key: "services",
+    label: "Services",
+    isComplete: (p) => p.services.length > 0,
+  },
+  {
+    key: "conditions",
+    label: "Conditions",
+    isComplete: (p) => p.conditions.length > 0,
+  },
   {
     key: "hours",
     label: "Opening hours",
-    isComplete: (p) => Object.values(p.weeklyHours).some((entry) => entry !== null),
+    isComplete: (p) =>
+      Object.values(p.weeklyHours).some((entry) => entry !== null),
   },
-  { key: "location", label: "Location", isComplete: (p) => Boolean(p.location?.text) },
+  {
+    key: "location",
+    label: "Location",
+    isComplete: (p) => Boolean(p.location?.text),
+  },
   {
     key: "pricing",
     label: "Pricing",
@@ -395,10 +446,14 @@ const COMPLETION_SECTIONS: Array<{ key: string; label: string; isComplete: (p: P
 ];
 
 export function computeProfileCompletion(profile: ProviderProfileView) {
-  const missing = COMPLETION_SECTIONS.filter((section) => !section.isComplete(profile)).map(
-    (section) => section.label,
+  const missing = COMPLETION_SECTIONS.filter(
+    (section) => !section.isComplete(profile),
+  ).map((section) => section.label);
+  const percent = Math.round(
+    ((COMPLETION_SECTIONS.length - missing.length) /
+      COMPLETION_SECTIONS.length) *
+      100,
   );
-  const percent = Math.round(((COMPLETION_SECTIONS.length - missing.length) / COMPLETION_SECTIONS.length) * 100);
   return { percent, missingItems: missing };
 }
 
@@ -423,14 +478,26 @@ function normalizeProfile(
     location,
     pricing: data.pricing ?? { minFee: "", maxFee: "", sessionLabel: "" },
     contact: data.contact ?? { phone: "", email: "", whatsapp: "" },
-    details: data.details ?? { officialName: "", foundedYear: "", registrationNumber: "", website: "" },
-    profileCompleteness: typeof data.profileCompleteness === "number" ? data.profileCompleteness : 0,
+    details: data.details ?? {
+      officialName: "",
+      foundedYear: "",
+      registrationNumber: "",
+      website: "",
+    },
+    profileCompleteness:
+      typeof data.profileCompleteness === "number"
+        ? data.profileCompleteness
+        : 0,
     missingItems: [],
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
   const completion = computeProfileCompletion(view);
-  return { ...view, profileCompleteness: completion.percent, missingItems: completion.missingItems };
+  return {
+    ...view,
+    profileCompleteness: completion.percent,
+    missingItems: completion.missingItems,
+  };
 }
 
 function profileCollectionFor(kind: ProviderProfileKind) {
@@ -486,6 +553,25 @@ export async function upsertProviderProfile(
   return normalizeProfile(reference.id, kind, saved.data() ?? {});
 }
 
+export function formatTimestamp(value: unknown): string {
+  if (!value) return new Date().toISOString();
+  if (typeof value === "object") {
+    if ("toDate" in (value as object)) {
+      try {
+        return (value as { toDate(): Date }).toDate().toISOString();
+      } catch {
+        // continue
+      }
+    }
+    if ("seconds" in (value as object)) {
+      const { seconds } = value as { seconds: number };
+      return new Date(seconds * 1000).toISOString();
+    }
+  }
+  if (typeof value === "string") return value;
+  return new Date().toISOString();
+}
+
 /**
  * Account-scoped dashboard queries. Every list is filtered by the verified
  * Firebase UID on the server — never fetched in bulk and filtered client-side.
@@ -499,7 +585,32 @@ export async function listEnquiriesForProvider(uid: string, limit = 50) {
     .limit(limit)
     .get();
   return snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }) as { id: string } & Record<string, unknown>)
+    .map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: formatTimestamp(data.createdAt),
+      } as { id: string } & Record<string, unknown>;
+    })
+    .sort((a, b) => compareTimestamps(b.createdAt, a.createdAt));
+}
+
+export async function listEnquiriesForCustomer(uid: string, limit = 50) {
+  const snapshot = await db()
+    .collection(COLLECTIONS.enquiries)
+    .where("customerUid", "==", uid)
+    .limit(limit)
+    .get();
+  return snapshot.docs
+    .map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: formatTimestamp(data.createdAt),
+      } as { id: string } & Record<string, unknown>;
+    })
     .sort((a, b) => compareTimestamps(b.createdAt, a.createdAt));
 }
 
@@ -510,17 +621,84 @@ export async function listBookingsForProvider(uid: string, limit = 50) {
     .limit(limit)
     .get();
   return snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }) as { id: string } & Record<string, unknown>)
-    .sort((a, b) => compareTimestamps(a.startsAt, b.startsAt));
+    .map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: formatTimestamp(data.createdAt),
+      } as { id: string } & Record<string, unknown>;
+    })
+    .sort((a, b) =>
+      compareTimestamps(a.startsAt ?? a.date, b.startsAt ?? b.date),
+    );
+}
+
+export async function listBookingsForCustomer(uid: string, limit = 50) {
+  const snapshot = await db()
+    .collection(COLLECTIONS.bookings)
+    .where("customerUid", "==", uid)
+    .limit(limit)
+    .get();
+  return snapshot.docs
+    .map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: formatTimestamp(data.createdAt),
+      } as { id: string } & Record<string, unknown>;
+    })
+    .sort((a, b) =>
+      compareTimestamps(a.startsAt ?? a.date, b.startsAt ?? b.date),
+    );
+}
+
+export async function getListingDocBySlug(slug: string): Promise<{
+  id: string;
+  kind: ProviderProfileKind;
+  ownerUid: string;
+  name: string;
+  data: FirebaseFirestore.DocumentData;
+} | null> {
+  const collections: Array<{ name: string; kind: ProviderProfileKind }> = [
+    { name: COLLECTIONS.institutionProfiles, kind: "institution" },
+    { name: COLLECTIONS.providerProfiles, kind: "soleProvider" },
+  ];
+
+  for (const { name: collectionName, kind } of collections) {
+    const snapshot = await db().collection(collectionName).limit(200).get();
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      const name = String(data.name ?? data.organizationName ?? "").trim();
+      const docSlug = slugify(name);
+      if (
+        docSlug === slug ||
+        doc.id === slug ||
+        data.slug === slug ||
+        data.listingId === slug
+      ) {
+        return {
+          id: doc.id,
+          kind,
+          ownerUid: data.ownerUid ?? "",
+          name,
+          data,
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 export async function listReviewsForProvider(uid: string, limit = 50) {
-  const profile = await getProviderProfileByOwner(
-    uid,
-    "institution",
-  ).catch(() => null);
+  const profile = await getProviderProfileByOwner(uid, "institution").catch(
+    () => null,
+  );
   const providerProfile =
-    profile ?? (await getProviderProfileByOwner(uid, "soleProvider").catch(() => null));
+    profile ??
+    (await getProviderProfileByOwner(uid, "soleProvider").catch(() => null));
   if (!providerProfile) return [];
 
   const snapshot = await db()
@@ -529,8 +707,119 @@ export async function listReviewsForProvider(uid: string, limit = 50) {
     .limit(limit)
     .get();
   return snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }) as { id: string } & Record<string, unknown>)
+    .map(
+      (doc) =>
+        ({ id: doc.id, ...doc.data() }) as { id: string } & Record<
+          string,
+          unknown
+        >,
+    )
     .sort((a, b) => compareTimestamps(b.createdAt, a.createdAt));
+}
+
+/**
+ * Maps a stored provider/institute profile document onto the public
+ * ProviderSummary shape used by search and profile pages. Profiles without a
+ * usable name are not discoverable and are skipped.
+ */
+function toListingSummary(
+  id: string,
+  kind: ProviderProfileKind,
+  data: FirebaseFirestore.DocumentData,
+): ProviderSummary | null {
+  const name = String(data.name ?? data.organizationName ?? "").trim();
+  if (!name) return null;
+
+  const profile = normalizeProfile(id, kind, data);
+  const locationText = profile.location?.text?.trim() || "";
+  const parts = locationText
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const latitude = profile.location?.latitude ?? null;
+  const longitude = profile.location?.longitude ?? null;
+
+  return {
+    id: profile.listingId || id,
+    slug: slugify(name),
+    providerType: kind === "institution" ? "institute" : "sole_provider",
+    name,
+    title:
+      profile.tagline ||
+      (kind === "institution" ? "Institute" : "Sole Provider"),
+    description: profile.bio,
+    services: profile.services,
+    conditions: profile.conditions,
+    ageGroups: [],
+    languages: [],
+    modes: ["in_clinic"],
+    location: {
+      formattedAddress: locationText,
+      city: parts.length > 1 ? parts[parts.length - 2] : (parts[0] ?? ""),
+      locality: parts[0] ?? "",
+      state: parts.length > 2 ? parts[parts.length - 2] : "",
+      country: parts.length > 2 ? parts[parts.length - 1] : "",
+      coordinates: {
+        type: "Point",
+        coordinates: [longitude ?? 0, latitude ?? 0],
+      },
+      publicPrecision: "approximate",
+    },
+    rating: 0,
+    reviewCount: 0,
+    yearsInService: 0,
+    priceRange: "medium",
+    profileCompleteness: profile.profileCompleteness,
+    verificationStatus: "not_requested",
+  };
+}
+
+/** Profile statuses that must never appear in public discovery. */
+const HIDDEN_PROFILE_STATUSES = new Set(["rejected", "hidden", "suspended"]);
+
+function isDiscoverable(data: FirebaseFirestore.DocumentData) {
+  return !HIDDEN_PROFILE_STATUSES.has(String(data.profileStatus ?? "draft"));
+}
+
+/**
+ * Testing-phase discovery: every validly registered provider/institute across
+ * India is discoverable regardless of profileStatus draft state or completion.
+ * Only explicitly hidden/rejected profiles are excluded. Geographic ranking
+ * and radius filtering are applied later by the search service, never here.
+ */
+export async function listDiscoverableListings(
+  limit = 200,
+): Promise<ProviderSummary[]> {
+  const collections = [
+    COLLECTIONS.institutionProfiles,
+    COLLECTIONS.providerProfiles,
+  ];
+  const summaries: ProviderSummary[] = [];
+
+  for (const collection of collections) {
+    const snapshot = await db().collection(collection).limit(limit).get();
+    for (const doc of snapshot.docs) {
+      if (!isDiscoverable(doc.data())) continue;
+      const summary = toListingSummary(
+        doc.id,
+        collection === COLLECTIONS.institutionProfiles
+          ? "institution"
+          : "soleProvider",
+        doc.data(),
+      );
+      if (summary) summaries.push(summary);
+    }
+  }
+
+  return summaries;
+}
+
+/** Finds one real listing by URL slug (slug is derived from the profile name). */
+export async function getListingSummaryBySlug(
+  slug: string,
+): Promise<ProviderSummary | null> {
+  const all = await listDiscoverableListings();
+  return all.find((listing) => listing.slug === slug) ?? null;
 }
 
 export async function softDeleteChildProfile(uid: string, childId: string) {

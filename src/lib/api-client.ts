@@ -54,7 +54,10 @@ export async function apiHeaders(): Promise<Record<string, string>> {
  * every query to the caller's own data. Returns null when no user is signed
  * in — dashboard code must never fall back to the shared demo workspace.
  */
-export async function authedApiHeaders(): Promise<Record<string, string> | null> {
+export async function authedApiHeaders(): Promise<Record<
+  string,
+  string
+> | null> {
   try {
     const { getFirebaseAuth } = await import("@/config/firebase");
     const auth = getFirebaseAuth();
@@ -76,7 +79,10 @@ export async function authedApiHeaders(): Promise<Record<string, string> | null>
  * Admin / Firestore) is not configured in this environment. Treated as an
  * empty-but-healthy state in the UI, never as a data error.
  */
-export function isConfigurationPendingResponse(status: number, body: unknown): boolean {
+export function isConfigurationPendingResponse(
+  status: number,
+  body: unknown,
+): boolean {
   if (status !== 501) return false;
   return typeof body === "object" && body !== null && "status" in body
     ? (body as { status?: string }).status === "configuration_required"

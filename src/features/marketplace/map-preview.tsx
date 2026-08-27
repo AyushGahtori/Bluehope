@@ -24,8 +24,8 @@ export function MapPreview() {
         ))}
       </div>
       <div className="p-6">
-        <p className="text-sm font-semibold text-slate-600">Showing results within 10 km of</p>
-        <p className="mt-1 text-xl font-extrabold text-bluehope">Andheri West, Mumbai</p>
+        <p className="text-sm font-semibold text-slate-600">Provider locations across India</p>
+        <p className="mt-1 text-xl font-extrabold text-bluehope">Set a distance filter to narrow by area</p>
       </div>
     </Card>
   );

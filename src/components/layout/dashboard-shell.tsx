@@ -21,6 +21,8 @@ import {
   Star,
   Users,
   HelpCircle,
+  Menu,
+  X,
 } from "lucide-react";
 import { BlueHopeLogo } from "@/components/brand/logo";
 import { getFirebaseAuth } from "@/config/firebase";
@@ -35,7 +37,7 @@ import { cn } from "@/lib/utils";
 
 const iconMap = {
   Dashboard: Home,
-  "Search Support": Search,
+  Search: Search,
   "Saved Providers": Heart,
   "My Enquiries": ShieldCheck,
   Appointments: CalendarCheck,
@@ -64,7 +66,7 @@ const iconMap = {
 
 const parentLinks: Record<string, string> = {
   Dashboard: "/dashboard/parent",
-  "Search Support": "/dashboard/parent/explore",
+  Search: "/dashboard/parent/search",
   "Saved Providers": "/dashboard/parent/saved",
   "My Enquiries": "/dashboard/parent/enquiries",
   Appointments: "/dashboard/parent/appointments",
@@ -114,10 +116,7 @@ const adminLinks: Record<string, string> = {
   Settings: "/dashboard/admin/settings",
 };
 
-function navHref(
-  item: string,
-  role: DashboardRole,
-) {
+function navHref(item: string, role: DashboardRole) {
   const links =
     role === "parent"
       ? parentLinks
@@ -129,7 +128,10 @@ function navHref(
   return links[item] ?? dashboardHomeFor(role);
 }
 
-const ACCOUNT_ROLE_FOR_DASHBOARD: Record<Exclude<DashboardRole, "admin">, AccountRole> = {
+const ACCOUNT_ROLE_FOR_DASHBOARD: Record<
+  Exclude<DashboardRole, "admin">,
+  AccountRole
+> = {
   parent: "customer",
   provider: "soleProvider",
   institution: "institution",
@@ -165,8 +167,14 @@ function useRoleGuard(expectedRole: DashboardRole) {
 
     const redirectFor = (role: AccountRole) => {
       const dashboardRole =
-        role === "customer" ? "parent" : role === "soleProvider" ? "provider" : "institution";
-      return dashboardRole === expectedRole ? null : ROLE_DASHBOARD[dashboardRole];
+        role === "customer"
+          ? "parent"
+          : role === "soleProvider"
+            ? "provider"
+            : "institution";
+      return dashboardRole === expectedRole
+        ? null
+        : ROLE_DASHBOARD[dashboardRole];
     };
 
     async function verify() {
@@ -195,6 +203,7 @@ function useRoleGuard(expectedRole: DashboardRole) {
       }
 
       let role = authUser?.role;
+      let serverConfirmedNoRole = false;
       if (!role) {
         // No locally known role: ask the server for the authoritative answer.
         try {
@@ -203,10 +212,17 @@ function useRoleGuard(expectedRole: DashboardRole) {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (response.ok) {
-            const data = (await response.json()) as { role?: AccountRole | null };
+            const data = (await response.json()) as {
+              role?: AccountRole | null;
+            };
             if (data.role) {
               role = data.role;
               persistRole(data.role);
+            } else {
+              // The server authoritatively resolved the account and found no
+              // application role. Never let a role-less account browse any
+              // role dashboard by URL.
+              serverConfirmedNoRole = true;
             }
           }
         } catch {
@@ -226,8 +242,16 @@ function useRoleGuard(expectedRole: DashboardRole) {
         return;
       }
 
-      // Account exists but role unknown (e.g. Firestore not configured yet).
-      // Allow the shell rather than locking the user out of a fresh account.
+      if (serverConfirmedNoRole) {
+        // Account exists without a role: send the user to the public home
+        // page where they can pick a role and complete onboarding.
+        router.replace("/");
+        return;
+      }
+
+      // Role could not be verified (offline / backend not configured yet).
+      // Allow the shell rather than locking the user out of a fresh account;
+      // every data request remains scoped server-side regardless.
       setState("allowed");
     }
 
@@ -246,27 +270,40 @@ export function DashboardShell({
   nav,
   roleLabel,
   role,
+  searchHeader,
 }: {
   children: ReactNode;
   nav: string[];
   roleLabel: string;
   role?: DashboardRole;
+  searchHeader?: ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const authUser = useStoredAuthUser();
 
+  // Close the mobile sidebar whenever the route changes.
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
+
   // Close the account menu on outside click or Escape.
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen && !sidebarOpen) return;
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+      if (menuOpen && !menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        setSidebarOpen(false);
+      }
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
@@ -275,7 +312,7 @@ export function DashboardShell({
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [menuOpen]);
+  }, [menuOpen, sidebarOpen]);
 
   const resolvedRole =
     role ??
@@ -287,17 +324,22 @@ export function DashboardShell({
           ? "provider"
           : "parent");
   const homeHref = dashboardHomeFor(resolvedRole);
+  const searchAction =
+    resolvedRole === "parent" ? "/dashboard/parent/search" : "/search";
 
   // Guard every dashboard route: URL role segments are never authoritative.
   const guardState = useRoleGuard(resolvedRole);
 
   const storedName = authUser?.name?.trim();
-  const headerLabel = storedName ? `Hi, ${storedName.split(" ")[0]}` : roleLabel;
+  const headerLabel = storedName
+    ? `Hi, ${storedName.split(" ")[0]}`
+    : roleLabel;
   const avatarInitial = storedName ? storedName.charAt(0).toUpperCase() : null;
 
   const logout = () => {
     clearStoredAuthUser();
     setMenuOpen(false);
+    setSidebarOpen(false);
     const auth = getFirebaseAuth();
     if (auth) {
       signOut(auth).catch(() => null);
@@ -307,18 +349,46 @@ export function DashboardShell({
 
   return (
     <div className="min-h-screen bg-white">
-      <aside className="fixed inset-y-0 left-0 hidden w-80 flex-col border-r border-slate-200 bg-slate-50 px-8 py-9 lg:flex">
-        <BlueHopeLogo href={homeHref} />
+      {/* Mobile / Tablet overlay backdrop */}
+      {sidebarOpen ? (
+        <div
+          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      ) : null}
+
+      {/* Unified sidebar implementation: drawer on mobile/tablet, fixed sidebar on desktop */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-80 flex-col border-r border-slate-200 bg-slate-50 px-8 py-9 transition-transform duration-200 ease-in-out lg:z-30 lg:translate-x-0",
+          sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full",
+        )}
+      >
+        <div className="flex items-center justify-between">
+          <BlueHopeLogo href={homeHref} />
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-900 lg:hidden"
+            aria-label="Close sidebar"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
         {/* Scrollable nav area: no item can ever be covered by the help card. */}
         <nav className="mt-10 min-h-0 flex-1 space-y-2 overflow-y-auto pb-4">
           {nav.map((item) => {
             const Icon = iconMap[item as keyof typeof iconMap] ?? FileText;
             const href = navHref(item, resolvedRole);
-            const active = pathname === href || (href !== homeHref && pathname.startsWith(href));
+            const active =
+              pathname === href ||
+              (href !== homeHref && pathname.startsWith(href));
             return (
               <Link
                 key={item}
                 href={href}
+                onClick={() => setSidebarOpen(false)}
                 className={cn(
                   "flex h-14 shrink-0 items-center gap-4 rounded-[8px] px-5 text-base font-medium text-slate-600 transition hover:bg-blue-50 hover:text-bluehope",
                   active && "bg-blue-50 text-bluehope",
@@ -332,27 +402,56 @@ export function DashboardShell({
         </nav>
         <div className="mt-4 shrink-0 rounded-[8px] border border-blue-100 bg-blue-50 p-5">
           <p className="font-bold text-slate-950">Need Help?</p>
-          <p className="mt-1 text-sm text-slate-600">Our support team is here to assist you.</p>
+          <p className="mt-1 text-sm text-slate-600">
+            Our support team is here to assist you.
+          </p>
         </div>
       </aside>
+
       <main className="lg:pl-80">
-        <div className="border-b border-slate-200 bg-white px-6 py-5">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-6">
-            <form action="/search" className="flex h-12 flex-1 max-w-2xl items-center gap-3 rounded-lg border border-slate-300 px-4 text-sm text-slate-500 transition focus-within:border-bluehope focus-within:ring-4 focus-within:ring-blue-100">
-              <Search className="h-5 w-5" />
-              <input
-                name="q"
-                className="min-w-0 flex-1 bg-transparent text-slate-800 outline-none placeholder:text-slate-500"
-                placeholder="Search by service, therapy, condition or provider"
-              />
-              <input type="hidden" name="radius" value="20" />
-            </form>
-            <div className="hidden items-center gap-4 sm:flex">
-              <Link href={navHref("Notifications", resolvedRole)} aria-label="Notifications">
+        <div className="border-b border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 sm:gap-6">
+            {/* Search area with responsive hamburger icon on smaller screens */}
+            <div className="flex flex-1 max-w-4xl items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen((open) => !open)}
+                aria-label="Toggle navigation menu"
+                aria-expanded={sidebarOpen}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 hover:text-bluehope lg:hidden"
+              >
+                <Menu className="h-6 w-6" />
+              </button>
+              {searchHeader ? (
+                searchHeader
+              ) : (
+                <form
+                  action={searchAction}
+                  className="flex h-12 flex-1 items-center gap-3 rounded-lg border border-slate-300 px-4 text-sm text-slate-500 transition focus-within:border-bluehope focus-within:ring-4 focus-within:ring-blue-100"
+                >
+                  <Search className="h-5 w-5 shrink-0" />
+                  <input
+                    name="q"
+                    className="min-w-0 flex-1 bg-transparent text-slate-800 outline-none placeholder:text-slate-500"
+                    placeholder="Search by service, therapy, condition or provider"
+                  />
+                </form>
+              )}
+            </div>
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+              <Link
+                href={navHref("Notifications", resolvedRole)}
+                aria-label="Notifications"
+                className="hidden text-slate-700 transition hover:text-bluehope sm:block"
+              >
                 <Bell className="h-6 w-6" />
               </Link>
               {resolvedRole === "parent" ? (
-                <Link href={navHref("Saved Providers", resolvedRole)} aria-label="Saved providers">
+                <Link
+                  href={navHref("Saved Providers", resolvedRole)}
+                  aria-label="Saved providers"
+                  className="hidden text-slate-700 transition hover:text-bluehope sm:block"
+                >
                   <Heart className="h-6 w-6" />
                 </Link>
               ) : null}
@@ -361,28 +460,35 @@ export function DashboardShell({
                   onClick={() => setMenuOpen((value) => !value)}
                   aria-expanded={menuOpen}
                   aria-haspopup="menu"
-                  className="flex items-center gap-3 rounded-full border border-blue-100 bg-blue-50 py-1.5 pl-2 pr-4 text-left transition hover:bg-blue-100"
+                  className="flex items-center gap-2 sm:gap-3 rounded-full border border-blue-100 bg-blue-50 py-1 pl-1.5 pr-2.5 sm:py-1.5 sm:pl-2 sm:pr-4 text-left transition hover:bg-blue-100"
                 >
                   {authUser?.photoURL ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={authUser.photoURL}
                       alt=""
-                      className="h-10 w-10 rounded-full object-cover"
+                      className="h-8 w-8 sm:h-10 sm:w-10 rounded-full object-cover"
                       referrerPolicy="no-referrer"
                     />
                   ) : (
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-600">
+                    <span className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-slate-200 text-xs sm:text-sm font-bold text-slate-600">
                       {avatarInitial ?? ""}
                     </span>
                   )}
-                  <span className="text-sm">
-                    <span className="block font-semibold text-bluehope">{headerLabel}</span>
-                    <span className="block text-slate-500">BlueHope</span>
+                  <span className="hidden sm:block text-sm">
+                    <span className="block font-semibold text-bluehope">
+                      {headerLabel}
+                    </span>
+                    <span className="block text-xs text-slate-500">
+                      BlueHope
+                    </span>
                   </span>
                 </button>
                 {menuOpen ? (
-                  <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-52 rounded-[12px] border border-blue-100 bg-white p-2 shadow-soft">
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full z-50 mt-2 w-52 rounded-[12px] border border-blue-100 bg-white p-2 shadow-soft"
+                  >
                     <Link
                       href={homeHref}
                       className="block rounded-[10px] px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-blue-50"
@@ -401,9 +507,13 @@ export function DashboardShell({
             </div>
           </div>
         </div>
-        <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
           {guardState === "checking" ? (
-            <div className="space-y-4" aria-busy="true" aria-label="Verifying your account">
+            <div
+              className="space-y-4"
+              aria-busy="true"
+              aria-label="Verifying your account"
+            >
               <div className="h-10 w-72 animate-pulse rounded-[8px] bg-slate-100" />
               <div className="h-40 animate-pulse rounded-[8px] bg-slate-100" />
             </div>
