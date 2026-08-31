@@ -2,6 +2,7 @@ import type { FieldValue, GeoPoint, Timestamp } from "firebase-admin/firestore";
 
 export const COLLECTIONS = {
   users: "users",
+  emailIndex: "emailIndex",
   customerProfiles: "customerProfiles",
   childProfiles: "childProfiles",
   providerProfiles: "providerProfiles",

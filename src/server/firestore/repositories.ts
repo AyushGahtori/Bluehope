@@ -157,7 +157,29 @@ export async function upsertUserFromAuth(
 export type EstablishRoleResult =
   | { status: "created"; role: SelfServeAccountRole }
   | { status: "existing"; role: SelfServeAccountRole }
-  | { status: "conflict"; role: SelfServeAccountRole };
+  | { status: "conflict"; role: SelfServeAccountRole }
+  | { status: "email_conflict"; role: SelfServeAccountRole; email: string };
+
+function normalizeEmail(value?: string | null): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+}
+
+async function getRoleForEmail(email: string, currentUid: string): Promise<SelfServeAccountRole | null> {
+  const emailRef = db().collection(COLLECTIONS.emailIndex).doc(email);
+  const emailDoc = await emailRef.get();
+  if (!emailDoc.exists) return null;
+
+  const ownerUid = typeof emailDoc.data()?.uid === "string" ? emailDoc.data()?.uid : null;
+  if (!ownerUid || ownerUid === currentUid) return null;
+
+  const userDoc = await db().collection(COLLECTIONS.users).doc(ownerUid).get();
+  const existingRole = userDoc.data()?.role;
+  return typeof existingRole === "string" && ACCOUNT_ROLES.includes(existingRole as SelfServeAccountRole)
+    ? (existingRole as SelfServeAccountRole)
+    : null;
+}
 
 /**
  * Authoritative role assignment keyed by Firebase UID. A single direct
@@ -182,11 +204,19 @@ export async function establishUserRole(
   const reference = db().collection(COLLECTIONS.users).doc(uid);
   const now = FieldValue.serverTimestamp();
   const snapshot = await reference.get();
+  const normalizedEmail = normalizeEmail(profile.email);
+
+  if (normalizedEmail) {
+    const conflictingRole = await getRoleForEmail(normalizedEmail, uid);
+    if (conflictingRole && conflictingRole !== role) {
+      return { status: "email_conflict", role: conflictingRole, email: normalizedEmail };
+    }
+  }
 
   if (!snapshot.exists) {
     const payload: Partial<UserDocument> = {
       uid,
-      email: profile.email ?? null,
+      email: normalizedEmail ?? null,
       phone: null,
       role,
       authProvider: profile.providerIds ?? ["google.com"],
@@ -198,6 +228,12 @@ export async function establishUserRole(
       lastLoginAt: now,
     };
     await reference.set({ ...payload, createdAt: now }, { merge: true });
+    if (normalizedEmail) {
+      await db().collection(COLLECTIONS.emailIndex).doc(normalizedEmail).set(
+        { uid, email: normalizedEmail, role },
+        { merge: true },
+      );
+    }
     return { status: "created", role };
   }
 
@@ -208,10 +244,12 @@ export async function establishUserRole(
     return { status: "conflict", role: existingRole as SelfServeAccountRole };
   }
 
+  const nextEmail = normalizedEmail ?? (profile.email !== undefined ? (profile.email ?? null) : undefined);
+
   await reference.set(
     {
       uid,
-      ...(profile.email !== undefined ? { email: profile.email } : {}),
+      ...(nextEmail !== undefined ? { email: nextEmail } : {}),
       ...(profile.displayName ? { displayName: profile.displayName } : {}),
       ...(profile.photoURL ? { photoURL: profile.photoURL } : {}),
       ...(profile.providerIds?.length
@@ -222,6 +260,14 @@ export async function establishUserRole(
     },
     { merge: true },
   );
+
+  if (normalizedEmail) {
+    await db().collection(COLLECTIONS.emailIndex).doc(normalizedEmail).set(
+      { uid, email: normalizedEmail, role: (existingRole ?? role) as SelfServeAccountRole },
+      { merge: true },
+    );
+  }
+
   return {
     status: "existing",
     role: (existingRole ?? role) as SelfServeAccountRole,

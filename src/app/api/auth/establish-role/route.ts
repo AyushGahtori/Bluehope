@@ -49,9 +49,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (result.status === "conflict") {
+    if (result.status === "conflict" || result.status === "email_conflict") {
       return Response.json(
-        { status: "conflict", role: result.role },
+        {
+          status: result.status,
+          role: result.role,
+          email: "email" in result ? result.email : null,
+        },
         { status: 409 },
       );
     }

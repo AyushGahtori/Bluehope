@@ -51,6 +51,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /emailIndex/{email} {
+      allow read: if signedIn() && (
+        resource.data.uid == request.auth.uid ||
+        isModerator()
+      );
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == email
+        && request.resource.data.role in ["customer", "soleProvider", "institution"]
+        && !exists(/databases/$(database)/documents/emailIndex/$(email));
+      allow update: if signedIn()
+        && request.auth.uid == resource.data.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == email
+        && request.resource.data.role in ["customer", "soleProvider", "institution"]
+        && unchangedProtectedFields(["uid", "email", "role", "createdAt"]);
+      allow delete: if false;
+    }
+
     match /customerProfiles/{uid} {
       allow read, create, update: if ownsUid(uid) || isModerator();
       allow delete: if false;

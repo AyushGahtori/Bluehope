@@ -103,6 +103,7 @@ async function postEstablishRole(
     if (response.status === 409) {
       const data = (await response.json().catch(() => ({}))) as {
         role?: SelfServeAccountRole;
+        status?: string;
       };
       return { ok: false, conflictRole: data.role, retryable: false };
     }
