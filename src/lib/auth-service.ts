@@ -34,12 +34,16 @@ export type RoleEstablished = {
 export type RoleOutcome = RoleEstablished | RoleConflict | AuthError;
 
 const FRIENDLY_MESSAGES: Record<AuthError["code"], string> = {
-  "popup-closed": "The Google sign-in window was closed before finishing. Please try again.",
+  "popup-closed":
+    "The Google sign-in window was closed before finishing. Please try again.",
   "popup-blocked":
     "Your browser blocked the Google sign-in popup. Allow popups for this site and try again.",
-  network: "We couldn't reach BlueHope services. Check your connection and try again.",
-  "not-configured": "Sign-in is not available right now. Please try again later.",
-  server: "Something went wrong while setting up your account. Please try again.",
+  network:
+    "We couldn't reach BlueHope services. Check your connection and try again.",
+  "not-configured":
+    "Sign-in is not available right now. Please try again later.",
+  server:
+    "Something went wrong while setting up your account. Please try again.",
   unknown: "We couldn't complete sign-in. Please try again.",
 };
 
@@ -51,13 +55,19 @@ export function mapSignInError(error: unknown): AuthError {
       : "";
 
   let kind: AuthError["code"] = "unknown";
-  if (code.includes("popup-closed-by-user") || code.includes("cancelled-popup-request")) {
+  if (
+    code.includes("popup-closed-by-user") ||
+    code.includes("cancelled-popup-request")
+  ) {
     kind = "popup-closed";
   } else if (code.includes("popup-blocked")) {
     kind = "popup-blocked";
   } else if (code.includes("network") || code.includes("internal")) {
     kind = "network";
-  } else if (code.includes("operation-not-supported") || code.includes("configuration")) {
+  } else if (
+    code.includes("operation-not-supported") ||
+    code.includes("configuration")
+  ) {
     kind = "not-configured";
   }
 
@@ -68,7 +78,10 @@ async function postEstablishRole(
   desiredRole: SelfServeAccountRole,
   profile: { displayName?: string | null; photoURL?: string | null },
 ): Promise<
-  | { ok: true; data: { status: "created" | "existing"; role: SelfServeAccountRole } }
+  | {
+      ok: true;
+      data: { status: "created" | "existing"; role: SelfServeAccountRole };
+    }
   | { ok: false; conflictRole?: SelfServeAccountRole; retryable: boolean }
 > {
   const auth = getFirebaseAuth();
@@ -124,7 +137,11 @@ export async function signInWithGoogleAndEstablishRole(
 ): Promise<RoleOutcome> {
   const auth = getFirebaseAuth();
   if (!auth) {
-    return { kind: "error", code: "not-configured", message: FRIENDLY_MESSAGES["not-configured"] };
+    return {
+      kind: "error",
+      code: "not-configured",
+      message: FRIENDLY_MESSAGES["not-configured"],
+    };
   }
 
   let credential;

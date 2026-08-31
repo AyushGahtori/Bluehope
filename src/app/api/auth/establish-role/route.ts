@@ -1,6 +1,12 @@
 import type { NextRequest } from "next/server";
-import { FirestoreUnavailableError, establishUserRole } from "@/server/firestore/repositories";
-import { protectedPendingResponse, resolveAuthContext } from "@/server/middleware/auth";
+import {
+  FirestoreUnavailableError,
+  establishUserRole,
+} from "@/server/firestore/repositories";
+import {
+  protectedPendingResponse,
+  resolveAuthContext,
+} from "@/server/middleware/auth";
 
 /**
  * Establishes (or continues) the caller's application account with exactly one
@@ -13,8 +19,12 @@ export async function POST(request: NextRequest) {
   if (!auth.authenticated) return protectedPendingResponse(auth);
 
   try {
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    const desiredRole = typeof body.desiredRole === "string" ? body.desiredRole : "";
+    const body = (await request.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
+    const desiredRole =
+      typeof body.desiredRole === "string" ? body.desiredRole : "";
 
     const firebaseClaims =
       typeof auth.claims?.firebase === "object" && auth.claims.firebase
@@ -44,7 +54,11 @@ export async function POST(request: NextRequest) {
 
     if (result.status === "invalid_role") {
       return Response.json(
-        { status: "invalid_role", message: "desiredRole must be one of customer, soleProvider, institution." },
+        {
+          status: "invalid_role",
+          message:
+            "desiredRole must be one of customer, soleProvider, institution.",
+        },
         { status: 400 },
       );
     }
@@ -62,7 +76,8 @@ export async function POST(request: NextRequest) {
 
     return Response.json({ status: result.status, role: result.role });
   } catch (error) {
-    if (error instanceof FirestoreUnavailableError) return protectedPendingResponse(auth);
+    if (error instanceof FirestoreUnavailableError)
+      return protectedPendingResponse(auth);
     throw error;
   }
 }

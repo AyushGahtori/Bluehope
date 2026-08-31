@@ -29,25 +29,27 @@ export const COLLECTIONS = {
   searchHistory: "searchHistory",
 } as const;
 
-export type FirestoreCollection = (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
+export type FirestoreCollection =
+  (typeof COLLECTIONS)[keyof typeof COLLECTIONS];
 
 export type AccountRole =
-  | "customer"
-  | "soleProvider"
-  | "institution"
-  | "staff"
-  | "moderator"
-  | "admin";
+  "customer" | "soleProvider" | "institution" | "staff" | "moderator" | "admin";
 
 /** Roles a self-serve account can be established with (one per Firebase UID). */
-export const ACCOUNT_ROLES = ["customer", "soleProvider", "institution"] as const;
+export const ACCOUNT_ROLES = [
+  "customer",
+  "soleProvider",
+  "institution",
+] as const;
 export type SelfServeAccountRole = (typeof ACCOUNT_ROLES)[number];
 
 export type AccountStatus = "active" | "pending" | "suspended" | "deleted";
 export type ListingType = "soleProvider" | "institution";
-export type ListingStatus = "draft" | "pendingReview" | "active" | "paused" | "rejected" | "archived";
+export type ListingStatus =
+  "draft" | "pendingReview" | "active" | "paused" | "rejected" | "archived";
 export type ModerationState = "pending" | "approved" | "rejected" | "hidden";
-export type VerificationStatus = "notRequested" | "pending" | "verified" | "rejected" | "expired";
+export type VerificationStatus =
+  "notRequested" | "pending" | "verified" | "rejected" | "expired";
 export type ContactMethod = "phone" | "email" | "whatsapp" | "inApp";
 export type TimestampLike = Timestamp | FieldValue;
 
@@ -310,7 +312,13 @@ export type BookingDocument = {
   serviceId: string;
   startsAt: TimestampLike;
   endsAt: TimestampLike;
-  status: "requested" | "confirmed" | "completed" | "cancelled" | "rejected" | "noShow";
+  status:
+    | "requested"
+    | "confirmed"
+    | "completed"
+    | "cancelled"
+    | "rejected"
+    | "noShow";
   paymentState: "notRequired" | "pending" | "paid" | "refunded";
   notes?: string;
   createdAt: TimestampLike;
@@ -356,12 +364,7 @@ export type EnquiryDocument = {
   serviceId?: string;
   message: string;
   status:
-    | "open"
-    | "responded"
-    | "accepted"
-    | "declined"
-    | "converted"
-    | "closed";
+    "open" | "responded" | "accepted" | "declined" | "converted" | "closed";
   responseMessage?: string;
   respondedAt?: TimestampLike;
   fraudFlags: string[];

@@ -166,17 +166,22 @@ function normalizeEmail(value?: string | null): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-async function getRoleForEmail(email: string, currentUid: string): Promise<SelfServeAccountRole | null> {
+async function getRoleForEmail(
+  email: string,
+  currentUid: string,
+): Promise<SelfServeAccountRole | null> {
   const emailRef = db().collection(COLLECTIONS.emailIndex).doc(email);
   const emailDoc = await emailRef.get();
   if (!emailDoc.exists) return null;
 
-  const ownerUid = typeof emailDoc.data()?.uid === "string" ? emailDoc.data()?.uid : null;
+  const ownerUid =
+    typeof emailDoc.data()?.uid === "string" ? emailDoc.data()?.uid : null;
   if (!ownerUid || ownerUid === currentUid) return null;
 
   const userDoc = await db().collection(COLLECTIONS.users).doc(ownerUid).get();
   const existingRole = userDoc.data()?.role;
-  return typeof existingRole === "string" && ACCOUNT_ROLES.includes(existingRole as SelfServeAccountRole)
+  return typeof existingRole === "string" &&
+    ACCOUNT_ROLES.includes(existingRole as SelfServeAccountRole)
     ? (existingRole as SelfServeAccountRole)
     : null;
 }
@@ -209,7 +214,11 @@ export async function establishUserRole(
   if (normalizedEmail) {
     const conflictingRole = await getRoleForEmail(normalizedEmail, uid);
     if (conflictingRole && conflictingRole !== role) {
-      return { status: "email_conflict", role: conflictingRole, email: normalizedEmail };
+      return {
+        status: "email_conflict",
+        role: conflictingRole,
+        email: normalizedEmail,
+      };
     }
   }
 
@@ -229,10 +238,10 @@ export async function establishUserRole(
     };
     await reference.set({ ...payload, createdAt: now }, { merge: true });
     if (normalizedEmail) {
-      await db().collection(COLLECTIONS.emailIndex).doc(normalizedEmail).set(
-        { uid, email: normalizedEmail, role },
-        { merge: true },
-      );
+      await db()
+        .collection(COLLECTIONS.emailIndex)
+        .doc(normalizedEmail)
+        .set({ uid, email: normalizedEmail, role }, { merge: true });
     }
     return { status: "created", role };
   }
@@ -244,7 +253,9 @@ export async function establishUserRole(
     return { status: "conflict", role: existingRole as SelfServeAccountRole };
   }
 
-  const nextEmail = normalizedEmail ?? (profile.email !== undefined ? (profile.email ?? null) : undefined);
+  const nextEmail =
+    normalizedEmail ??
+    (profile.email !== undefined ? (profile.email ?? null) : undefined);
 
   await reference.set(
     {
@@ -262,10 +273,17 @@ export async function establishUserRole(
   );
 
   if (normalizedEmail) {
-    await db().collection(COLLECTIONS.emailIndex).doc(normalizedEmail).set(
-      { uid, email: normalizedEmail, role: (existingRole ?? role) as SelfServeAccountRole },
-      { merge: true },
-    );
+    await db()
+      .collection(COLLECTIONS.emailIndex)
+      .doc(normalizedEmail)
+      .set(
+        {
+          uid,
+          email: normalizedEmail,
+          role: (existingRole ?? role) as SelfServeAccountRole,
+        },
+        { merge: true },
+      );
   }
 
   return {
