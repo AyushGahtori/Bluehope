@@ -60,11 +60,19 @@ export function useStoredAuthUser(): StoredAuthUser | null {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
-export function clearStoredAuthUser() {
+export function writeStoredAuthUser(user: StoredAuthUser | null) {
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    if (user) {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    } else {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
   } catch {
     // Storage may be unavailable; still notify subscribers.
   }
   emitChange();
+}
+
+export function clearStoredAuthUser() {
+  writeStoredAuthUser(null);
 }

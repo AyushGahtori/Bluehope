@@ -1,6 +1,12 @@
 import type { NextRequest } from "next/server";
-import { FirestoreUnavailableError, getUserByUid } from "@/server/firestore/repositories";
-import { protectedPendingResponse, resolveAuthContext } from "@/server/middleware/auth";
+import {
+  FirestoreUnavailableError,
+  getUserByUid,
+} from "@/server/firestore/repositories";
+import {
+  protectedPendingResponse,
+  resolveAuthContext,
+} from "@/server/middleware/auth";
 
 /**
  * Returns the authenticated account's authoritative application role, read
@@ -16,12 +22,14 @@ export async function GET(request: NextRequest) {
     return Response.json({
       status: "ok",
       uid: auth.firebaseUid,
-      email: auth.email ?? null,
+      email: auth.email ?? user?.email ?? null,
+      displayName: user?.displayName ?? null,
       role: user?.role ?? null,
       onboardingCompleted: user?.onboardingCompleted ?? false,
     });
   } catch (error) {
-    if (error instanceof FirestoreUnavailableError) return protectedPendingResponse(auth);
+    if (error instanceof FirestoreUnavailableError)
+      return protectedPendingResponse(auth);
     throw error;
   }
 }

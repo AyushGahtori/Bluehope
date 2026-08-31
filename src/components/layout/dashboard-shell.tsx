@@ -26,7 +26,11 @@ import {
 } from "lucide-react";
 import { BlueHopeLogo } from "@/components/brand/logo";
 import { getFirebaseAuth } from "@/config/firebase";
-import { clearStoredAuthUser, useStoredAuthUser } from "@/lib/auth-user-store";
+import {
+  clearStoredAuthUser,
+  useStoredAuthUser,
+  writeStoredAuthUser,
+} from "@/lib/auth-user-store";
 import {
   dashboardHomeFor,
   ROLE_DASHBOARD,
@@ -127,15 +131,6 @@ function navHref(item: string, role: DashboardRole) {
           : providerLinks;
   return links[item] ?? dashboardHomeFor(role);
 }
-
-const ACCOUNT_ROLE_FOR_DASHBOARD: Record<
-  Exclude<DashboardRole, "admin">,
-  AccountRole
-> = {
-  parent: "customer",
-  provider: "soleProvider",
-  institution: "institution",
-};
 
 /**
  * Auth-aware route guard. The URL role segment is never trusted: the guard
@@ -285,10 +280,70 @@ export function DashboardShell({
   const menuRef = useRef<HTMLDivElement>(null);
   const authUser = useStoredAuthUser();
 
-  // Close the mobile sidebar whenever the route changes.
   useEffect(() => {
-    setSidebarOpen(false);
-  }, [pathname]);
+    let cancelled = false;
+
+    const syncStoredIdentity = async () => {
+      const auth = getFirebaseAuth();
+      const user = auth?.currentUser;
+      if (!user) return;
+
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch("/api/auth/session", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok || cancelled) return;
+
+        const data = (await response.json()) as {
+          displayName?: string | null;
+          email?: string | null;
+          role?: AccountRole | null;
+          uid?: string | null;
+        };
+
+        const nextName =
+          data.displayName ||
+          data.email?.split("@")[0] ||
+          user.displayName ||
+          "";
+        const nextUser = {
+          uid: user.uid,
+          name: nextName || undefined,
+          email: data.email || user.email || undefined,
+          photoURL: user.photoURL || authUser?.photoURL || undefined,
+          role: data.role || authUser?.role,
+        };
+
+        const currentSignature = JSON.stringify({
+          uid: authUser?.uid,
+          name: authUser?.name,
+          email: authUser?.email,
+          photoURL: authUser?.photoURL,
+          role: authUser?.role,
+        });
+        const nextSignature = JSON.stringify(nextUser);
+
+        if (!cancelled && currentSignature !== nextSignature) {
+          writeStoredAuthUser(nextUser);
+        }
+      } catch {
+        // Ignore refresh failures; stale local data is already better than a
+        // blank dashboard, and the server remains the authoritative source.
+      }
+    };
+
+    void syncStoredIdentity();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authUser?.uid,
+    authUser?.email,
+    authUser?.name,
+    authUser?.photoURL,
+    authUser?.role,
+  ]);
 
   // Close the account menu on outside click or Escape.
   useEffect(() => {

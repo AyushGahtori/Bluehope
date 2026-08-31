@@ -1,7 +1,10 @@
 "use client";
 
 import { getFirebaseAuth, googleProvider } from "@/config/firebase";
-import { clearStoredAuthUser } from "@/lib/auth-user-store";
+import {
+  clearStoredAuthUser,
+  writeStoredAuthUser,
+} from "@/lib/auth-user-store";
 import type { SelfServeAccountRole } from "@/models/firestore";
 
 export type RoleConflict = {
@@ -206,9 +209,5 @@ function persistAuthUser(user: {
   photoURL?: string;
   role?: SelfServeAccountRole;
 }) {
-  try {
-    window.localStorage.setItem("bluehope.authUser", JSON.stringify(user));
-  } catch {
-    // Storage may be unavailable; session still works via Firebase.
-  }
+  writeStoredAuthUser(user);
 }
