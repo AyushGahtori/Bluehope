@@ -10,6 +10,7 @@ import type { SelfServeAccountRole } from "@/models/firestore";
 export type RoleConflict = {
   kind: "conflict";
   existingRole: SelfServeAccountRole;
+  email?: string | null;
 };
 
 export type AuthError = {
@@ -85,7 +86,12 @@ async function postEstablishRole(
       ok: true;
       data: { status: "created" | "existing"; role: SelfServeAccountRole };
     }
-  | { ok: false; conflictRole?: SelfServeAccountRole; retryable: boolean }
+  | {
+      ok: false;
+      conflictRole?: SelfServeAccountRole;
+      email?: string | null;
+      retryable: boolean;
+    }
 > {
   const auth = getFirebaseAuth();
   const currentUser = auth?.currentUser;
@@ -119,9 +125,15 @@ async function postEstablishRole(
     if (response.status === 409) {
       const data = (await response.json().catch(() => ({}))) as {
         role?: SelfServeAccountRole;
+        email?: string | null;
         status?: string;
       };
-      return { ok: false, conflictRole: data.role, retryable: false };
+      return {
+        ok: false,
+        conflictRole: data.role,
+        email: data.email ?? null,
+        retryable: false,
+      };
     }
 
     return { ok: false, retryable: response.status >= 500 };
@@ -150,6 +162,7 @@ export async function signInWithGoogleAndEstablishRole(
   let credential;
   try {
     const { signInWithPopup } = await import("firebase/auth");
+    googleProvider.setCustomParameters({ prompt: "select_account" });
     credential = await signInWithPopup(auth, googleProvider);
   } catch (error) {
     return mapSignInError(error);
@@ -164,15 +177,14 @@ export async function signInWithGoogleAndEstablishRole(
   if (!result.ok) {
     if (result.conflictRole) {
       // Leave the Firebase session intact so "Continue as <role>" works
-      // without a second sign-in, but do not create conflicting data.
-      persistAuthUser({
-        uid: user.uid,
-        name: user.displayName ?? undefined,
-        email: user.email ?? undefined,
-        photoURL: user.photoURL ?? undefined,
-        role: result.conflictRole,
-      });
-      return { kind: "conflict", existingRole: result.conflictRole };
+      // without a second sign-in, but do not publish the conflicting role as
+      // the active local app session while the conflict choice is on screen.
+      clearStoredAuthUser();
+      return {
+        kind: "conflict",
+        existingRole: result.conflictRole,
+        email: result.email ?? user.email ?? null,
+      };
     }
     await auth.signOut().catch(() => undefined);
     clearStoredAuthUser();

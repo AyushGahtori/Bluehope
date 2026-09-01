@@ -1,7 +1,12 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Building2, ChevronRight, HeartHandshake, Stethoscope } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  Building2,
+  ChevronRight,
+  HeartHandshake,
+  Stethoscope,
+} from "lucide-react";
 import { useState } from "react";
 import { BlueHopeLogo } from "@/components/brand/logo";
 import { Badge, LinkButton } from "@/components/ui/primitives";
@@ -38,6 +43,7 @@ const roles = [
 export function RoleOnboarding() {
   const [selected, setSelected] = useState<Role>("parent");
   const selectedRole = roles.find((role) => role.id === selected) ?? roles[0];
+  const reduceMotion = useReducedMotion();
 
   return (
     <main className="min-h-screen bg-soft-blue">
@@ -46,7 +52,11 @@ export function RoleOnboarding() {
           <BlueHopeLogo />
           <div className="hidden items-center gap-3 text-sm text-slate-600 sm:flex">
             Already have an account?
-            <LinkButton href="/dashboard/parent" variant="ghost" className="h-10 px-3">
+            <LinkButton
+              href="/dashboard/parent"
+              variant="ghost"
+              className="h-10 px-3"
+            >
               Log in
             </LinkButton>
           </div>
@@ -65,26 +75,71 @@ export function RoleOnboarding() {
               {roles.map((role) => {
                 const Icon = role.icon;
                 const isSelected = selected === role.id;
+                const transition = reduceMotion
+                  ? { duration: 0 }
+                  : { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const };
+
                 return (
                   <motion.button
                     key={role.id}
-                    whileHover={{ y: -2 }}
+                    whileHover={reduceMotion ? undefined : { y: -1 }}
+                    whileTap={reduceMotion ? undefined : { scale: 0.995 }}
                     onClick={() => setSelected(role.id)}
                     className={cn(
-                      "group flex items-center gap-5 rounded-[8px] border bg-white p-5 text-left shadow-card transition",
+                      "group relative flex items-center gap-5 overflow-hidden rounded-[8px] border p-5 text-left shadow-card transition-colors duration-200",
                       isSelected
-                        ? "border-bluehope ring-4 ring-blue-100"
+                        ? "border-[#bfd5ff]"
                         : "border-slate-200 hover:border-blue-200",
                     )}
                   >
-                    <span className={cn("flex h-16 w-16 shrink-0 items-center justify-center rounded-[8px]", role.tone)}>
+                    <motion.span
+                      aria-hidden="true"
+                      initial={false}
+                      animate={
+                        isSelected
+                          ? { scaleX: 1, opacity: 1 }
+                          : { scaleX: 0, opacity: 0 }
+                      }
+                      transition={transition}
+                      className="absolute inset-y-0 left-0 w-full origin-left bg-[#2d7df6]"
+                    />
+
+                    <span
+                      className={cn(
+                        "relative flex h-16 w-16 shrink-0 items-center justify-center rounded-[8px] z-10 transition-colors duration-300",
+                        isSelected ? "bg-white/16 text-white" : role.tone,
+                      )}
+                    >
                       <Icon className="h-8 w-8" />
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-lg font-bold text-slate-950">{role.title}</span>
-                      <span className="mt-1 block text-sm text-slate-600">{role.description}</span>
+
+                    <span className="relative z-10 min-w-0 flex-1">
+                      <span
+                        className={cn(
+                          "block text-lg font-bold transition-colors duration-300",
+                          isSelected ? "text-white" : "text-slate-950",
+                        )}
+                      >
+                        {role.title}
+                      </span>
+                      <span
+                        className={cn(
+                          "mt-1 block text-sm transition-colors duration-300",
+                          isSelected ? "text-blue-50" : "text-slate-600",
+                        )}
+                      >
+                        {role.description}
+                      </span>
                     </span>
-                    <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-bluehope" />
+
+                    <ChevronRight
+                      className={cn(
+                        "relative z-10 h-5 w-5 transition-colors duration-300",
+                        isSelected
+                          ? "text-white"
+                          : "text-slate-400 group-hover:text-bluehope",
+                      )}
+                    />
                   </motion.button>
                 );
               })}
@@ -104,14 +159,26 @@ export function RoleOnboarding() {
             <div className="relative rounded-[8px] bg-white p-6 shadow-card">
               <div className="mb-6 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-bluehope">BlueHope discovery</p>
-                  <h2 className="text-3xl font-extrabold text-slate-950">Personalized support starts here</h2>
+                  <p className="text-sm font-semibold text-bluehope">
+                    BlueHope discovery
+                  </p>
+                  <h2 className="text-3xl font-extrabold text-slate-950">
+                    Personalized support starts here
+                  </h2>
                 </div>
                 <span className="h-14 w-14 rounded-full bg-slate-200" />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                {["Speech Therapy", "Autism Support", "Occupational Therapy", "Special Education"].map((item, index) => (
-                  <div key={item} className="rounded-[8px] border border-slate-200 bg-slate-50 p-4">
+                {[
+                  "Speech Therapy",
+                  "Autism Support",
+                  "Occupational Therapy",
+                  "Special Education",
+                ].map((item, index) => (
+                  <div
+                    key={item}
+                    className="rounded-[8px] border border-slate-200 bg-slate-50 p-4"
+                  >
                     <div
                       className={cn(
                         "mb-4 h-12 w-12 rounded-[8px]",
@@ -122,12 +189,16 @@ export function RoleOnboarding() {
                       )}
                     />
                     <p className="font-bold text-slate-950">{item}</p>
-                    <p className="mt-1 text-sm text-slate-600">Find services and providers</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Find services and providers
+                    </p>
                   </div>
                 ))}
               </div>
               <div className="mt-6 rounded-[8px] bg-soft-blue p-5">
-                <p className="font-semibold text-slate-950">Architecture status</p>
+                <p className="font-semibold text-slate-950">
+                  Architecture status
+                </p>
                 <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
                   <span>Firebase auth ready</span>
                   <span>Firestore data model ready</span>

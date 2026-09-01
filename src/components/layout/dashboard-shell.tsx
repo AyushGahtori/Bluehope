@@ -277,6 +277,7 @@ export function DashboardShell({
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const authUser = useStoredAuthUser();
 
@@ -391,15 +392,17 @@ export function DashboardShell({
     : roleLabel;
   const avatarInitial = storedName ? storedName.charAt(0).toUpperCase() : null;
 
-  const logout = () => {
-    clearStoredAuthUser();
+  const logout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
     setMenuOpen(false);
     setSidebarOpen(false);
     const auth = getFirebaseAuth();
     if (auth) {
-      signOut(auth).catch(() => null);
+      await signOut(auth).catch(() => null);
     }
-    router.push("/");
+    clearStoredAuthUser();
+    router.replace("/");
   };
 
   return (
@@ -552,9 +555,10 @@ export function DashboardShell({
                     </Link>
                     <button
                       onClick={logout}
+                      disabled={loggingOut}
                       className="block w-full rounded-[10px] px-3 py-2 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50"
                     >
-                      Log out
+                      {loggingOut ? "Logging out..." : "Log out"}
                     </button>
                   </div>
                 ) : null}

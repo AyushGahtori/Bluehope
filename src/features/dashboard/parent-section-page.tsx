@@ -21,6 +21,7 @@ import {
 import { demoAppointments, demoProviders } from "@/data/demo";
 import { ProviderCard } from "@/features/marketplace/provider-card";
 import { StoredNameField } from "@/features/dashboard/user-greeting";
+import { ConversationPanel } from "@/features/dashboard/provider-inbox-sections";
 import { useStoredAuthUser } from "@/lib/auth-user-store";
 import { apiHeaders } from "@/lib/api-client";
 
@@ -50,10 +51,14 @@ const pageMap: Record<string, { title: string; icon: typeof Search }> = {
 
 type Enquiry = {
   id: string;
+  listingSlug: string;
   listingName: string;
+  parentName: string;
+  phone: string;
   serviceId: string;
+  childName?: string;
   message: string;
-  status: string;
+  status: "new" | "responded" | "in_progress" | "closed";
   createdAt: string;
 };
 
@@ -399,8 +404,9 @@ function AppointmentsSection({ signedIn }: { signedIn: boolean }) {
 
 function MessagesSection({ signedIn }: { signedIn: boolean }) {
   const [threads, setThreads] = useState<
-    { name: string; preview: string }[] | null
+    { enquiry: Enquiry; preview: string }[] | null
   >(null);
+  const [openEnquiryId, setOpenEnquiryId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -423,7 +429,7 @@ function MessagesSection({ signedIn }: { signedIn: boolean }) {
         if (!ignore) {
           setThreads(
             [...byListing.values()].map((enquiry) => ({
-              name: enquiry.listingName,
+              enquiry,
               preview: enquiry.message,
             })),
           );
@@ -436,6 +442,10 @@ function MessagesSection({ signedIn }: { signedIn: boolean }) {
       ignore = true;
     };
   }, [signedIn]);
+
+  const openThread = threads
+    ?.map((thread) => thread.enquiry)
+    .find((enquiry) => enquiry.id === openEnquiryId);
 
   if (!signedIn) {
     return (
@@ -463,6 +473,17 @@ function MessagesSection({ signedIn }: { signedIn: boolean }) {
     );
   }
 
+  if (openThread) {
+    return (
+      <ConversationPanel
+        key={openThread.id}
+        enquiry={openThread}
+        viewerRole="parent"
+        onBack={() => setOpenEnquiryId(null)}
+      />
+    );
+  }
+
   return (
     <Card className="p-6">
       <SectionTitle title="Messages" />
@@ -476,16 +497,20 @@ function MessagesSection({ signedIn }: { signedIn: boolean }) {
         />
       ) : (
         threads.map((thread) => (
-          <div
-            key={thread.name}
-            className="flex items-center gap-4 border-b border-slate-100 py-4 last:border-0"
+          <button
+            type="button"
+            key={thread.enquiry.id}
+            onClick={() => setOpenEnquiryId(thread.enquiry.id)}
+            className="flex w-full items-center gap-4 border-b border-slate-100 py-4 text-left transition hover:bg-blue-50/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 last:border-0"
           >
-            <span className="h-12 w-12 rounded-full bg-blue-100" />
-            <div>
-              <p className="font-bold">{thread.name}</p>
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-bluehope">
+              {thread.enquiry.listingName.slice(0, 1)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold">{thread.enquiry.listingName}</p>
               <p className="text-sm text-slate-600">{thread.preview}</p>
             </div>
-          </div>
+          </button>
         ))
       )}
     </Card>

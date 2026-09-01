@@ -33,6 +33,19 @@ const postSchema = z.discriminatedUnion("kind", [
 
 type RouteParams = { params: Promise<{ id: string }> };
 
+function participantUids(enquiryData: FirebaseFirestore.DocumentData) {
+  return [enquiryData.customerUid, enquiryData.providerUid].filter(
+    (uid): uid is string => typeof uid === "string" && uid.length > 0,
+  );
+}
+
+function canAccessEnquiry(
+  enquiryData: FirebaseFirestore.DocumentData,
+  uid?: string,
+) {
+  return Boolean(uid && participantUids(enquiryData).includes(uid));
+}
+
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   const enquiryId = id.startsWith("conv-") ? id.slice("conv-".length) : id;
@@ -45,6 +58,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const enquiryDoc = await firestore.collection(COLLECTIONS.enquiries).doc(enquiryId).get();
       if (enquiryDoc.exists) {
         const enquiryData = enquiryDoc.data()!;
+        if (!canAccessEnquiry(enquiryData, auth.firebaseUid)) {
+          return Response.json({ status: "forbidden" }, { status: 403 });
+        }
+
         const snapshot = await firestore
           .collection(COLLECTIONS.enquiries)
           .doc(enquiryId)
@@ -125,12 +142,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
   }
 
+  const fallbackSenderRole: "provider" | "parent" =
+    auth.role === "institution" || auth.role === "soleProvider"
+      ? "provider"
+      : "parent";
+
   const firestore = getAdminFirestore();
   if (firestore) {
     try {
       const enquiryDoc = await firestore.collection(COLLECTIONS.enquiries).doc(enquiryId).get();
       if (enquiryDoc.exists) {
         const enquiryData = enquiryDoc.data()!;
+        if (!canAccessEnquiry(enquiryData, auth.firebaseUid)) {
+          return Response.json({ status: "forbidden" }, { status: 403 });
+        }
+
         const senderRole: "provider" | "parent" =
           auth.firebaseUid && auth.firebaseUid === enquiryData.providerUid
             ? "provider"
@@ -222,6 +248,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 : "cancelled";
 
           if (targetMsgDoc) {
+            const appointmentSenderRole = targetMsgDoc.data().senderRole;
+            if (
+              appointmentSenderRole !== "system" &&
+              appointmentSenderRole === senderRole
+            ) {
+              return Response.json(
+                {
+                  status: "forbidden",
+                  message: "The account that proposed an appointment cannot confirm or decline it.",
+                },
+                { status: 403 },
+              );
+            }
+
             const currentAppt = targetMsgDoc.data().appointment;
             const updatedAppt = { ...currentAppt, status };
             await targetMsgDoc.ref.set(
@@ -266,7 +306,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const body = parsed.data;
 
   if (body.kind === "text") {
-    const message = appendDemoText(effectiveOwner, `conv-${enquiryId}`, "provider", body.text);
+    const message = appendDemoText(
+      effectiveOwner,
+      `conv-${enquiryId}`,
+      fallbackSenderRole,
+      body.text,
+    );
     if (!message) {
       const conv = getOrCreateDemoConversation(effectiveOwner, {
         id: enquiryId,
@@ -275,7 +320,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         message: body.text,
         createdAt: new Date().toISOString(),
       });
-      const fallbackMsg = appendDemoText(effectiveOwner, conv.id, "provider", body.text);
+      const fallbackMsg = appendDemoText(
+        effectiveOwner,
+        conv.id,
+        fallbackSenderRole,
+        body.text,
+      );
       return Response.json(
         { status: "created", message: fallbackMsg ?? conv.messages[0] },
         { status: 201 },
@@ -288,11 +338,35 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const result = requestDemoAppointment(effectiveOwner, `conv-${enquiryId}`, {
       date: body.date,
       time: body.time,
+      senderRole: fallbackSenderRole,
     });
     if (!result) {
       return Response.json({ status: "not_found", resource: "conversation" }, { status: 404 });
     }
     return Response.json({ status: "created", ...result }, { status: 201 });
+  }
+
+  const conversation = listDemoConversations(effectiveOwner).find(
+    (item) =>
+      item.id === `conv-${enquiryId}` ||
+      item.id === enquiryId ||
+      item.enquiryId === enquiryId,
+  );
+  const appointmentMessage = conversation?.messages.find(
+    (message) => message.appointment?.id === body.appointmentId,
+  );
+  if (
+    appointmentMessage &&
+    appointmentMessage.senderRole !== "system" &&
+    appointmentMessage.senderRole === fallbackSenderRole
+  ) {
+    return Response.json(
+      {
+        status: "forbidden",
+        message: "The account that proposed an appointment cannot confirm or decline it.",
+      },
+      { status: 403 },
+    );
   }
 
   const appointment = setDemoAppointmentStatus(

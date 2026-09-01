@@ -52,6 +52,8 @@ type ConversationMessage = {
   createdAt: string;
 };
 
+type ConversationViewerRole = "parent" | "provider";
+
 const statusLabels: Record<EnquiryStatus, string> = {
   new: "New",
   responded: "Responded",
@@ -71,6 +73,13 @@ const appointmentTones: Record<AppointmentStatus, "amber" | "green" | "neutral">
   confirmed: "green",
   declined: "neutral",
   cancelled: "neutral",
+};
+
+const appointmentStatusLabels: Record<AppointmentStatus, string> = {
+  requested: "Requested",
+  confirmed: "Confirmed",
+  declined: "Declined",
+  cancelled: "Cancelled",
 };
 
 function formatService(serviceId: string) {
@@ -140,11 +149,15 @@ function useEnquiries() {
 export function ConversationPanel({
   enquiry,
   onBack,
+  viewerRole = "provider",
 }: {
   enquiry: Enquiry;
   onBack: () => void;
+  viewerRole?: ConversationViewerRole;
 }) {
   const conversationId = `conv-${enquiry.id}`;
+  const counterpartName =
+    viewerRole === "parent" ? enquiry.listingName : enquiry.parentName;
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -222,11 +235,29 @@ export function ConversationPanel({
     await post({ kind: "appointment_action", appointmentId, action });
   };
 
+  const appointmentTitleFor = (message: ConversationMessage) => {
+    if (message.senderRole === "provider") return "Appointment proposal";
+    return "Appointment request";
+  };
+
+  const appointmentStatusFor = (message: ConversationMessage) => {
+    const status = message.appointment?.status ?? "requested";
+    if (status !== "requested") return appointmentStatusLabels[status];
+    if (message.senderRole === viewerRole) {
+      return message.senderRole === "provider"
+        ? "Approval pending"
+        : "Request sent";
+    }
+    return message.senderRole === "provider" ? "Proposed" : "Requested";
+  };
+
   return (
     <Card className="flex h-[640px] flex-col p-0">
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
         <div className="min-w-0">
-          <p className="truncate font-bold text-slate-950">{enquiry.parentName}</p>
+          <p className="truncate font-bold text-slate-950">
+            {counterpartName}
+          </p>
           <p className="mt-0.5 truncate text-xs text-slate-500">
             {formatService(enquiry.serviceId)} · via Contact Now
           </p>
@@ -248,19 +279,25 @@ export function ConversationPanel({
           messages.map((message) => {
             if (message.kind === "appointment" && message.appointment) {
               const appointment = message.appointment;
+              const canActOnAppointment =
+                appointment.status === "requested" &&
+                message.senderRole !== "system" &&
+                message.senderRole !== viewerRole;
               return (
                 <div key={message.id} className="rounded-[10px] border border-blue-100 bg-white p-4 shadow-card">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-bold text-slate-950 flex items-center gap-2">
                       <CalendarCheck className="h-4 w-4 text-bluehope" />
-                      Appointment request
+                      {appointmentTitleFor(message)}
                     </p>
-                    <Badge tone={appointmentTones[appointment.status]}>{appointment.status}</Badge>
+                    <Badge tone={appointmentTones[appointment.status]}>
+                      {appointmentStatusFor(message)}
+                    </Badge>
                   </div>
                   <p className="mt-2 text-sm text-slate-600">
                     {formatService(appointment.serviceId)} · {appointment.date} at {appointment.time}
                   </p>
-                  {appointment.status === "requested" ? (
+                  {canActOnAppointment ? (
                     <div className="mt-3 flex gap-2">
                       <Button
                         className="h-9 px-4"
@@ -278,12 +315,16 @@ export function ConversationPanel({
                         Decline
                       </Button>
                     </div>
+                  ) : appointment.status === "requested" ? (
+                    <p className="mt-3 text-sm font-medium text-slate-500">
+                      Waiting for the other side to respond.
+                    </p>
                   ) : null}
                 </div>
               );
             }
 
-            const mine = message.senderRole === "provider";
+            const mine = message.senderRole === viewerRole;
             return (
               <div key={message.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
                 <div
@@ -315,7 +356,7 @@ export function ConversationPanel({
                 void sendText();
               }
             }}
-            placeholder={`Reply to ${enquiry.parentName}...`}
+            placeholder={`Reply to ${counterpartName}...`}
             aria-label="Reply message"
           />
           <Button onClick={sendText} disabled={sending || !draft.trim()} aria-label="Send reply">
@@ -324,7 +365,7 @@ export function ConversationPanel({
         </div>
         <div className="mt-3 flex flex-wrap items-end gap-2 rounded-[10px] bg-soft-blue p-3">
           <label className="text-xs font-semibold text-slate-600">
-            Propose appointment
+            {viewerRole === "provider" ? "Propose appointment" : "Request appointment"}
             <Input
               type="date"
               value={apptDate}
@@ -343,7 +384,7 @@ export function ConversationPanel({
             />
           </label>
           <Button variant="outline" className="h-10" disabled={sending} onClick={requestAppointment}>
-            Send request
+            {viewerRole === "provider" ? "Propose appointment" : "Send request"}
           </Button>
         </div>
       </div>
@@ -453,11 +494,9 @@ export function ProviderMessagesSection() {
       ) : (
         <div className="space-y-4">
           {enquiries.map((enquiry) => (
-            <button
-              type="button"
+            <div
               key={enquiry.id}
-              onClick={() => setOpenEnquiryId(enquiry.id)}
-              className="flex w-full items-start gap-4 border-b border-slate-100 py-4 text-left last:border-0 transition hover:bg-blue-50/50"
+              className="flex w-full items-start gap-4 border-b border-slate-100 py-4 text-left last:border-0"
             >
               <span
                 className={cn(
@@ -476,21 +515,24 @@ export function ProviderMessagesSection() {
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <Badge tone={statusTones[enquiry.status]}>{statusLabels[enquiry.status]}</Badge>
                   <Badge tone="blue">{formatService(enquiry.serviceId)}</Badge>
+                  <Button
+                    className="h-8 px-3 text-xs"
+                    onClick={() => setOpenEnquiryId(enquiry.id)}
+                  >
+                    Open chat
+                  </Button>
                   {enquiry.status === "new" ? (
                     <Button
                       variant="outline"
                       className="h-8 px-3 text-xs"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void updateStatus(enquiry.id, "responded");
-                      }}
+                      onClick={() => updateStatus(enquiry.id, "responded")}
                     >
                       Mark Responded
                     </Button>
                   ) : null}
                 </div>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       )}

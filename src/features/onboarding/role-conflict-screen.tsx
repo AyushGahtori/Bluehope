@@ -11,7 +11,7 @@ import type { SelfServeAccountRole } from "@/models/firestore";
 const ROLE_LABELS: Record<SelfServeAccountRole, string> = {
   customer: "Parent / Family Member",
   soleProvider: "Sole Provider",
-  institution: "Institute",
+  institution: "Institute / Organization",
 };
 
 const ROLE_ROUTES: Record<SelfServeAccountRole, string> = {
@@ -22,16 +22,18 @@ const ROLE_ROUTES: Record<SelfServeAccountRole, string> = {
 
 export function RoleConflictScreen({
   existingRole,
+  email,
   onUseDifferentAccount,
 }: {
   existingRole: SelfServeAccountRole;
+  email?: string | null;
   onUseDifferentAccount?: () => void;
 }) {
   const router = useRouter();
   const [switching, setSwitching] = useState(false);
 
   const continueAsExisting = () => {
-    router.push(ROLE_ROUTES[existingRole]);
+    router.replace(ROLE_ROUTES[existingRole]);
   };
 
   const useDifferentAccount = async () => {
@@ -47,22 +49,36 @@ export function RoleConflictScreen({
   };
 
   return (
-    <Card className="mx-auto w-full max-w-lg p-8 text-center">
-      <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50">
-        <ShieldAlert className="h-7 w-7 text-bluehope" />
+    <Card className="mx-auto w-full max-w-lg p-8 text-center shadow-[0_18px_40px_rgba(31,42,55,0.06)]">
+      <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-[#edf5ff]">
+        <ShieldAlert className="h-7 w-7 text-[#2d7df6]" />
       </div>
-      <h2 className="text-xl font-bold text-slate-950">Account already registered</h2>
-      <p className="mt-3 text-sm leading-6 text-slate-600">
-        This Google account is already registered as a{" "}
-        <span className="font-semibold text-slate-900">{ROLE_LABELS[existingRole]}</span> account.
-        BlueHope accounts currently support one primary role per account.
+      <h2 className="text-2xl font-extrabold tracking-[-0.04em] text-slate-950">
+        You’re signing in as
+      </h2>
+      <p className="mt-3 text-lg font-semibold text-[#2d7df6] break-all">
+        {email ?? "this email"}
+      </p>
+      <p className="mt-4 text-sm leading-7 text-slate-600">
+        This email is already registered as an{" "}
+        <span className="font-semibold text-slate-900">
+          {ROLE_LABELS[existingRole]}
+        </span>{" "}
+        on BlueHope.
+      </p>
+      <p className="mt-2 text-sm font-medium text-slate-500">
+        Choose one of the options below to continue safely.
       </p>
       <div className="mt-7 flex flex-col gap-3">
         <Button onClick={continueAsExisting}>
-          Continue as {ROLE_LABELS[existingRole]}
+          Continue to {ROLE_LABELS[existingRole]}
         </Button>
-        <Button variant="outline" onClick={useDifferentAccount} disabled={switching}>
-          {switching ? "Signing out…" : "Use a different Google account"}
+        <Button
+          variant="outline"
+          onClick={useDifferentAccount}
+          disabled={switching}
+        >
+          {switching ? "Signing out…" : "Use another email"}
         </Button>
       </div>
     </Card>

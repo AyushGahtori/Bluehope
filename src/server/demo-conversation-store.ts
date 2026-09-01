@@ -107,7 +107,7 @@ export function appendDemoText(
 export function requestDemoAppointment(
   owner: string,
   conversationId: string,
-  input: { date: string; time: string },
+  input: { date: string; time: string; senderRole: "parent" | "provider" },
 ): { message: DemoConversationMessage; appointment: DemoAppointment } | null {
   const conversation = bucketFor(owner).get(conversationId.replace(/^conv-/, ""));
   if (!conversation) return null;
@@ -121,7 +121,7 @@ export function requestDemoAppointment(
   };
   const message: DemoConversationMessage = {
     id: `${conversation.id}-a${conversation.messages.length}-${Date.now()}`,
-    senderRole: "system",
+    senderRole: input.senderRole,
     kind: "appointment",
     appointment,
     createdAt: nowIso(),
@@ -153,7 +153,7 @@ export function setDemoAppointmentStatus(
       status === "confirmed"
         ? "Appointment confirmed."
         : status === "declined"
-          ? "Appointment declined by the provider."
+          ? "Appointment declined."
           : "Appointment cancelled.",
     createdAt: nowIso(),
   });
