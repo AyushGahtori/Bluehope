@@ -44,14 +44,14 @@ export function ProfilePreview({ data }: { data: ProfilePreviewData }) {
   return (
     <Card className="overflow-hidden">
       <div className="grid gap-0 lg:grid-cols-[minmax(280px,420px)_1fr]">
-        <div className="relative min-h-[260px] bg-slate-100 lg:min-h-[320px]">
+        <div className="relative min-h-[260px] overflow-hidden bg-slate-100 lg:min-h-[320px]">
           {hasImages ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={data.images[safeIndex]}
                 alt={`${data.name} photo ${safeIndex + 1}`}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover transition duration-500 hover:scale-[1.02]"
               />
               {data.images.length > 1 ? (
                 <>
@@ -59,7 +59,7 @@ export function ProfilePreview({ data }: { data: ProfilePreviewData }) {
                     type="button"
                     aria-label="Previous image"
                     onClick={() => setIndex((value) => (value - 1 + data.images.length) % data.images.length)}
-                    className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-card transition hover:bg-white"
+                    className="bluehope-lift absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-card transition hover:bg-white hover:text-bluehope"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
@@ -67,7 +67,7 @@ export function ProfilePreview({ data }: { data: ProfilePreviewData }) {
                     type="button"
                     aria-label="Next image"
                     onClick={() => setIndex((value) => (value + 1) % data.images.length)}
-                    className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-card transition hover:bg-white"
+                    className="bluehope-lift absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-card transition hover:bg-white hover:text-bluehope"
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>
@@ -117,13 +117,13 @@ export function ProfilePreview({ data }: { data: ProfilePreviewData }) {
           ) : null}
 
           <dl className="mt-5 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[8px] bg-slate-50 p-3">
+            <div className="bluehope-lift rounded-[8px] bg-slate-50 p-3 hover:bg-blue-50">
               <dt className="text-xs font-semibold uppercase text-slate-500">Open today</dt>
               <dd className="mt-1 text-sm font-bold text-slate-900">
                 {data.openingHoursToday ?? "Not set yet"}
               </dd>
             </div>
-            <div className="rounded-[8px] bg-slate-50 p-3">
+            <div className="bluehope-lift rounded-[8px] bg-slate-50 p-3 hover:bg-blue-50">
               <dt className="text-xs font-semibold uppercase text-slate-500">Location</dt>
               <dd className="mt-1 text-sm font-bold text-slate-900">{data.location ?? "Not set yet"}</dd>
             </div>
@@ -155,7 +155,7 @@ export function ProfilePreview({ data }: { data: ProfilePreviewData }) {
             </div>
             <div className="mt-2 h-2 rounded-full bg-slate-100">
               <div
-                className="h-2 rounded-full bg-bluehope transition-all"
+                className="h-2 rounded-full bg-bluehope transition-all duration-500"
                 style={{ width: `${Math.max(4, Math.min(100, data.completionPercent))}%` }}
               />
             </div>

@@ -419,7 +419,7 @@ export function DashboardShell({
       {/* Unified sidebar implementation: drawer on mobile/tablet, fixed sidebar on desktop */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-80 flex-col border-r border-slate-200 bg-slate-50 px-8 py-9 transition-transform duration-200 ease-in-out lg:z-30 lg:translate-x-0",
+          "bluehope-enter fixed inset-y-0 left-0 z-50 flex w-80 flex-col border-r border-slate-200 bg-slate-50 px-8 py-9 transition-transform duration-200 ease-in-out lg:z-30 lg:translate-x-0",
           sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full",
         )}
       >
@@ -447,18 +447,19 @@ export function DashboardShell({
                 key={item}
                 href={href}
                 onClick={() => setSidebarOpen(false)}
+                data-active={active}
                 className={cn(
-                  "flex h-14 shrink-0 items-center gap-4 rounded-[8px] px-5 text-base font-medium text-slate-600 transition hover:bg-blue-50 hover:text-bluehope",
-                  active && "bg-blue-50 text-bluehope",
+                  "bluehope-fill bluehope-lift flex h-14 shrink-0 items-center gap-4 rounded-[8px] border border-transparent px-5 text-base font-medium text-slate-600 transition hover:bg-blue-50",
+                  active && "border-bluehope text-white shadow-card",
                 )}
               >
                 <Icon className="h-6 w-6" />
-                {item}
+                <span>{item}</span>
               </Link>
             );
           })}
         </nav>
-        <div className="mt-4 shrink-0 rounded-[8px] border border-blue-100 bg-blue-50 p-5">
+        <div className="bluehope-lift mt-4 shrink-0 rounded-[8px] border border-blue-100 bg-blue-50 p-5">
           <p className="font-bold text-slate-950">Need Help?</p>
           <p className="mt-1 text-sm text-slate-600">
             Our support team is here to assist you.
@@ -476,7 +477,7 @@ export function DashboardShell({
                 onClick={() => setSidebarOpen((open) => !open)}
                 aria-label="Toggle navigation menu"
                 aria-expanded={sidebarOpen}
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 hover:text-bluehope lg:hidden"
+                className="bluehope-lift flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:border-bluehope hover:bg-blue-50 hover:text-bluehope lg:hidden"
               >
                 <Menu className="h-6 w-6" />
               </button>
@@ -485,7 +486,7 @@ export function DashboardShell({
               ) : (
                 <form
                   action={searchAction}
-                  className="flex h-12 flex-1 items-center gap-3 rounded-lg border border-slate-300 px-4 text-sm text-slate-500 transition focus-within:border-bluehope focus-within:ring-4 focus-within:ring-blue-100"
+                  className="bluehope-focus-glow flex h-12 flex-1 items-center gap-3 rounded-lg border border-slate-300 px-4 text-sm text-slate-500 transition hover:border-blue-200 focus-within:border-bluehope focus-within:ring-4 focus-within:ring-blue-100"
                 >
                   <Search className="h-5 w-5 shrink-0" />
                   <input
@@ -500,7 +501,7 @@ export function DashboardShell({
               <Link
                 href={navHref("Notifications", resolvedRole)}
                 aria-label="Notifications"
-                className="hidden text-slate-700 transition hover:text-bluehope sm:block"
+                className="bluehope-lift hidden rounded-full p-2 text-slate-700 transition hover:bg-blue-50 hover:text-bluehope sm:block"
               >
                 <Bell className="h-6 w-6" />
               </Link>
@@ -508,7 +509,7 @@ export function DashboardShell({
                 <Link
                   href={navHref("Saved Providers", resolvedRole)}
                   aria-label="Saved providers"
-                  className="hidden text-slate-700 transition hover:text-bluehope sm:block"
+                  className="bluehope-lift hidden rounded-full p-2 text-slate-700 transition hover:bg-blue-50 hover:text-bluehope sm:block"
                 >
                   <Heart className="h-6 w-6" />
                 </Link>
@@ -518,7 +519,7 @@ export function DashboardShell({
                   onClick={() => setMenuOpen((value) => !value)}
                   aria-expanded={menuOpen}
                   aria-haspopup="menu"
-                  className="flex items-center gap-2 sm:gap-3 rounded-full border border-blue-100 bg-blue-50 py-1 pl-1.5 pr-2.5 sm:py-1.5 sm:pl-2 sm:pr-4 text-left transition hover:bg-blue-100"
+                  className="bluehope-lift flex items-center gap-2 sm:gap-3 rounded-full border border-blue-100 bg-blue-50 py-1 pl-1.5 pr-2.5 sm:py-1.5 sm:pl-2 sm:pr-4 text-left transition hover:border-bluehope hover:bg-blue-100"
                 >
                   {authUser?.photoURL ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -545,7 +546,7 @@ export function DashboardShell({
                 {menuOpen ? (
                   <div
                     role="menu"
-                    className="absolute right-0 top-full z-50 mt-2 w-52 rounded-[12px] border border-blue-100 bg-white p-2 shadow-soft"
+                    className="bluehope-enter absolute right-0 top-full z-50 mt-2 w-52 rounded-[12px] border border-blue-100 bg-white p-2 shadow-soft"
                   >
                     <Link
                       href={homeHref}

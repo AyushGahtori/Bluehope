@@ -108,7 +108,7 @@ function SectionShell({
         </h3>
         <Link
           href={viewAllHref}
-          className="text-sm font-semibold text-bluehope hover:underline"
+          className="bluehope-lift rounded-md px-2 py-1 text-sm font-semibold text-bluehope hover:bg-blue-50"
         >
           View all
         </Link>
@@ -204,7 +204,7 @@ export function RecentEnquiriesCard({
           {demoEnquiries.slice(0, 3).map((enquiry) => (
             <li
               key={enquiry.id}
-              className="flex items-center justify-between rounded-[8px] bg-slate-50 px-4 py-3"
+              className="bluehope-lift flex items-center justify-between rounded-[8px] bg-slate-50 px-4 py-3 hover:bg-blue-50"
             >
               <div>
                 <p className="font-semibold text-slate-900">
@@ -232,7 +232,7 @@ export function RecentEnquiriesCard({
             return (
               <li
                 key={enquiry.id}
-                className="flex items-center justify-between rounded-[8px] bg-slate-50 px-4 py-3"
+                className="bluehope-lift flex items-center justify-between rounded-[8px] bg-slate-50 px-4 py-3 hover:bg-blue-50"
               >
                 <div>
                   <p className="font-semibold text-slate-900">
@@ -341,7 +341,7 @@ export function UpcomingAppointmentsCard({
             return (
               <li
                 key={appointment.id}
-                className="flex items-center gap-4 rounded-[8px] bg-slate-50 px-4 py-3"
+                className="bluehope-lift flex items-center gap-4 rounded-[8px] bg-slate-50 px-4 py-3 hover:bg-blue-50"
               >
                 <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-[8px] bg-white text-center">
                   <span className="text-[10px] font-bold uppercase text-slate-500">
@@ -391,7 +391,7 @@ export function ReviewsSummaryCard({
       icon={<Star className="h-5 w-5 text-bluehope" />}
     >
       {typeof ratingAverage === "number" && ratingTotal ? (
-        <div className="rounded-[8px] bg-slate-50 px-4 py-6 text-center">
+        <div className="bluehope-lift rounded-[8px] bg-slate-50 px-4 py-6 text-center hover:bg-blue-50">
           <p className="text-3xl font-extrabold text-slate-950">
             ★ {ratingAverage.toFixed(1)}
           </p>
@@ -412,7 +412,7 @@ export function ReviewsSummaryCard({
 
 export function DashboardDataHint({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3 rounded-[8px] border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-slate-600">
+    <div className="bluehope-lift flex items-start gap-3 rounded-[8px] border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-slate-600">
       <Inbox className="mt-0.5 h-4 w-4 shrink-0 text-bluehope" />
       <p>{children}</p>
     </div>

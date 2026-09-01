@@ -8,22 +8,27 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type ButtonProps = ComponentPropsWithoutRef<"button"> & {
-  variant?: "primary" | "secondary" | "outline" | "ghost";
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "neutral";
 };
 
-export function Button({ className, variant = "primary", ...props }: ButtonProps) {
+export function Button({ className, variant = "primary", children, ...props }: ButtonProps) {
   return (
     <button
       className={cn(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:translate-y-0 disabled:scale-100 disabled:opacity-60",
-        variant === "primary" && "bg-bluehope text-white shadow-soft hover:bg-bluehope-dark",
-        variant === "secondary" && "bg-blue-50 text-bluehope hover:bg-blue-100",
-        variant === "outline" && "border border-bluehope text-bluehope hover:bg-blue-50",
+        "bluehope-lift inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:translate-y-0 disabled:scale-100 disabled:opacity-60",
+        variant === "primary" && "bluehope-fill border border-bluehope bg-bluehope text-white shadow-soft hover:bg-bluehope",
+        variant === "secondary" && "border border-blue-100 bg-blue-50 text-bluehope hover:border-bluehope hover:text-white",
+        variant === "outline" && "bluehope-fill border border-bluehope bg-white text-bluehope",
         variant === "ghost" && "text-bluehope hover:bg-blue-50",
+        variant === "neutral" && "border border-slate-200 bg-white text-slate-900 shadow-sm hover:border-blue-200 hover:bg-blue-50",
         className,
       )}
       {...props}
-    />
+    >
+      <span className="relative z-10 inline-flex items-center justify-center gap-2">
+        {children}
+      </span>
+    </button>
   );
 }
 
@@ -42,15 +47,18 @@ export function LinkButton({
     <Link
       href={href}
       className={cn(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
-        variant === "primary" && "bg-bluehope text-white shadow-soft hover:bg-bluehope-dark",
-        variant === "secondary" && "bg-blue-50 text-bluehope hover:bg-blue-100",
-        variant === "outline" && "border border-bluehope text-bluehope hover:bg-blue-50",
+        "bluehope-lift inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
+        variant === "primary" && "bluehope-fill border border-bluehope bg-bluehope text-white shadow-soft hover:bg-bluehope",
+        variant === "secondary" && "border border-blue-100 bg-blue-50 text-bluehope hover:border-bluehope hover:text-white",
+        variant === "outline" && "bluehope-fill border border-bluehope bg-white text-bluehope",
         variant === "ghost" && "text-bluehope hover:bg-blue-50",
+        variant === "neutral" && "border border-slate-200 bg-white text-slate-900 shadow-sm hover:border-blue-200 hover:bg-blue-50",
         className,
       )}
     >
-      {children}
+      <span className="relative z-10 inline-flex items-center justify-center gap-2">
+        {children}
+      </span>
     </Link>
   );
 }
@@ -58,7 +66,7 @@ export function LinkButton({
 export function Card({ className, ...props }: ComponentPropsWithoutRef<"div">) {
   return (
     <div
-      className={cn("rounded-[8px] border border-slate-200 bg-white shadow-card", className)}
+      className={cn("bluehope-enter bluehope-lift rounded-[8px] border border-slate-200 bg-white shadow-card", className)}
       {...props}
     />
   );
@@ -68,7 +76,7 @@ export function Input({ className, ...props }: ComponentPropsWithoutRef<"input">
   return (
     <input
       className={cn(
-        "h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-bluehope focus:ring-4 focus:ring-blue-100",
+        "bluehope-focus-glow h-12 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 hover:border-blue-200 focus:border-bluehope focus:ring-4 focus:ring-blue-100",
         className,
       )}
       {...props}
@@ -98,11 +106,12 @@ export function BlueCheckbox({
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
-      className={cn(
-        "group flex w-full items-start gap-3 rounded-[10px] p-2 text-left transition hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-60",
-        className,
-      )}
-    >
+        className={cn(
+          "group bluehope-fill flex w-full items-start gap-3 rounded-[10px] border border-transparent p-2 text-left transition hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-60",
+          checked && "text-white",
+          className,
+        )}
+      >
       <span
         className={cn(
           "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition",
@@ -126,7 +135,7 @@ export function Select({ className, ...props }: ComponentPropsWithoutRef<"select
     <div className="relative">
       <select
         className={cn(
-          "h-12 w-full appearance-none rounded-[12px] border border-slate-300 bg-white px-4 pr-11 text-sm font-medium text-slate-700 outline-none transition hover:border-blue-200 focus:border-bluehope focus:ring-4 focus:ring-blue-100",
+          "bluehope-focus-glow h-12 w-full appearance-none rounded-[12px] border border-slate-300 bg-white px-4 pr-11 text-sm font-medium text-slate-700 outline-none transition hover:border-blue-200 focus:border-bluehope focus:ring-4 focus:ring-blue-100",
           className,
         )}
         {...props}
@@ -198,7 +207,7 @@ export function BlueSelect({
           if (event.key === "Escape") setOpen(false);
         }}
         className={cn(
-          "group flex h-12 w-full items-center justify-between rounded-[12px] border border-slate-300 bg-white px-4 text-left text-sm font-semibold text-slate-800 shadow-sm transition hover:border-blue-200 focus:border-bluehope focus:outline-none focus:ring-4 focus:ring-blue-100",
+          "group bluehope-focus-glow flex h-12 w-full items-center justify-between rounded-[12px] border border-slate-300 bg-white px-4 text-left text-sm font-semibold text-slate-800 shadow-sm transition hover:border-blue-200 focus:border-bluehope focus:outline-none focus:ring-4 focus:ring-blue-100",
           open && "border-bluehope ring-4 ring-blue-100",
         )}
       >

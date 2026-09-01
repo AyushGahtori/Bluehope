@@ -960,21 +960,22 @@ function ParentStep({
             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => onSupportForChange(option.value)}
+            data-active={supportFor === option.value}
             className={cn(
-              "relative rounded-[12px] border p-6 text-left transition",
+              "bluehope-fill bluehope-lift relative rounded-[12px] border p-6 text-left transition",
               supportFor === option.value
-                ? "border-bluehope bg-blue-50 shadow-soft"
-                : "border-slate-200 bg-white",
+                ? "border-bluehope shadow-soft"
+                : "border-slate-200 bg-white text-slate-950",
             )}
           >
-            <User className="h-8 w-8 text-bluehope" />
+            <User className={cn("h-8 w-8", supportFor === option.value ? "text-white" : "text-bluehope")} />
             {supportFor === option.value ? (
-              <span className="absolute right-4 top-4 rounded-full bg-bluehope p-1 text-white">
+              <span className="absolute right-4 top-4 rounded-full bg-white/20 p-1 text-white">
                 <Check className="h-4 w-4" />
               </span>
             ) : null}
             <p className="mt-5 text-xl font-bold">{option.label}</p>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className={cn("mt-2 text-sm", supportFor === option.value ? "text-blue-50" : "text-slate-600")}>
               Personalize support without a long medical questionnaire.
             </p>
           </motion.button>
@@ -1088,18 +1089,19 @@ function ParentStep({
                   whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => onToggleCondition(condition.id)}
+                  data-active={selected}
                   className={cn(
-                    "flex min-h-[82px] gap-3 rounded-[12px] border p-4 text-left transition",
+                    "bluehope-fill bluehope-lift flex min-h-[82px] gap-3 rounded-[12px] border p-4 text-left transition",
                     selected
-                      ? "border-bluehope bg-blue-50 shadow-card"
-                      : "border-slate-200 bg-white hover:border-blue-200",
+                      ? "border-bluehope shadow-card"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-blue-200",
                   )}
                 >
                   <span
                     className={cn(
-                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border",
+                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition",
                       selected
-                        ? "border-bluehope bg-bluehope text-white"
+                        ? "border-white bg-white/20 text-white"
                         : "border-slate-300",
                     )}
                   >
@@ -1152,7 +1154,8 @@ function SignInCard({
           Your profile, enquiries, and appointments stay linked to one identity.
         </p>
         <Button
-          className="mt-6 w-full bg-white text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50"
+          variant="neutral"
+          className="mt-6 w-full"
           onClick={onGoogleSignIn}
         >
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white">
@@ -1644,18 +1647,19 @@ function CheckboxGrid({
               whileHover={{ y: -1 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => onToggle(item)}
+              aria-checked={isSelected}
               className={cn(
-                "flex gap-3 rounded-[12px] border p-3 text-left text-sm transition",
+                "bluehope-fill bluehope-lift flex gap-3 rounded-[12px] border p-3 text-left text-sm transition",
                 isSelected
-                  ? "border-bluehope bg-blue-50"
-                  : "border-slate-200 bg-white",
+                  ? "border-bluehope"
+                  : "border-slate-200 bg-white text-slate-700",
               )}
             >
               <span
                 className={cn(
-                  "h-4 w-4 rounded border",
+                  "h-4 w-4 rounded border transition",
                   isSelected
-                    ? "border-bluehope bg-bluehope"
+                    ? "border-white bg-white/20"
                     : "border-slate-300",
                 )}
               />
@@ -1684,7 +1688,7 @@ function CredentialStep() {
         <Input placeholder="Country" />
         <Input placeholder="Year of completion" />
       </div>
-      <div className="rounded-[8px] border border-dashed border-bluehope bg-blue-50 p-8 text-center">
+      <div className="bluehope-enter bluehope-lift rounded-[8px] border border-dashed border-bluehope bg-blue-50 p-8 text-center">
         <FileUp className="mx-auto h-10 w-10 text-bluehope" />
         <p className="mt-3 font-bold">
           Upload a clear, readable image or PDF of your certificate.

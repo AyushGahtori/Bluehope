@@ -63,7 +63,7 @@ export function RoleOnboarding() {
         </header>
 
         <section className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[0.9fr_1.1fr]">
-          <div>
+          <div className="bluehope-enter">
             <Badge tone="blue">Foundation MVP</Badge>
             <h1 className="mt-6 max-w-xl text-5xl font-extrabold leading-tight text-slate-950">
               Welcome to <span className="text-bluehope">BlueHope</span>
@@ -154,7 +154,7 @@ export function RoleOnboarding() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-[8px] border border-white/80 bg-white p-7 shadow-soft">
+          <div className="bluehope-enter bluehope-lift relative overflow-hidden rounded-[8px] border border-white/80 bg-white p-7 shadow-soft">
             <div className="absolute inset-x-0 top-0 h-36 bg-bluehope" />
             <div className="relative rounded-[8px] bg-white p-6 shadow-card">
               <div className="mb-6 flex items-center justify-between">
@@ -177,7 +177,7 @@ export function RoleOnboarding() {
                 ].map((item, index) => (
                   <div
                     key={item}
-                    className="rounded-[8px] border border-slate-200 bg-slate-50 p-4"
+                    className="bluehope-lift rounded-[8px] border border-slate-200 bg-slate-50 p-4 hover:border-blue-200"
                   >
                     <div
                       className={cn(
@@ -195,7 +195,7 @@ export function RoleOnboarding() {
                   </div>
                 ))}
               </div>
-              <div className="mt-6 rounded-[8px] bg-soft-blue p-5">
+              <div className="bluehope-soft-pulse mt-6 rounded-[8px] bg-soft-blue p-5">
                 <p className="font-semibold text-slate-950">
                   Architecture status
                 </p>

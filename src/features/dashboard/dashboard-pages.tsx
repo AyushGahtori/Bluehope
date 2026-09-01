@@ -198,7 +198,7 @@ function ProviderDashboardBody({
   const displayName = profile?.name || authUser?.name || fallbackName;
 
   return (
-    <>
+    <div className="bluehope-enter">
       <h1 className="text-3xl font-extrabold text-slate-950">Your Profile</h1>
       <p className="mt-2 text-slate-600">
         This is how families see{" "}
@@ -265,7 +265,7 @@ function ProviderDashboardBody({
         </div>
         <ReviewsSummaryCard viewAllHref={reviewsHref} />
       </div>
-    </>
+    </div>
   );
 }
 
@@ -312,95 +312,97 @@ export function InstituteDashboard() {
 export function ParentDashboard() {
   return (
     <DashboardShell nav={parentNav} roleLabel="Hi, Neha" role="parent">
-      <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
-        <Card className="bg-soft-blue p-8">
-          <UserGreeting fallback="Welcome back!" />
-          <p className="mt-4 max-w-xl text-lg text-slate-600">
-            We are here to help you find the right support for your child and
-            their unique needs.
-          </p>
-          <div className="mt-7 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-[8px] bg-white p-4">
-              <p className="text-sm font-semibold text-slate-500">
-                Active child context
-              </p>
-              <p className="mt-1 text-lg font-bold text-slate-950">
-                Aarav · Speech support
-              </p>
-            </div>
-            <div className="rounded-[8px] bg-white p-4">
-              <p className="text-sm font-semibold text-slate-500">
-                Recommended next step
-              </p>
-              <p className="mt-1 text-lg font-bold text-slate-950">
-                Compare 6 nearby therapists
-              </p>
-            </div>
-            <div className="rounded-[8px] bg-white p-4">
-              <p className="text-sm font-semibold text-slate-500">
-                Marketplace loop
-              </p>
-              <p className="mt-1 text-lg font-bold text-slate-950">
-                Contact · Book · Review
-              </p>
-            </div>
-          </div>
-          <LinkButton
-            href="/dashboard/parent/search"
-            className="mt-6"
-            variant="outline"
-          >
-            Search support
-          </LinkButton>
-        </Card>
-        <Card className="p-6">
-          <SectionTitle
-            title="Your Children"
-            action={
-              <LinkButton href="#" variant="ghost">
-                View all
-              </LinkButton>
-            }
-          />
-          <div className="flex items-center gap-4 rounded-[8px] border border-slate-200 p-4">
-            <span className="h-16 w-16 rounded-full bg-slate-200" />
-            <div>
-              <p className="font-bold">Aarav Sharma</p>
-              <p className="text-sm text-slate-600">8 years old</p>
-              <p className="text-sm text-slate-600">Autism (ASD)</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-      <QuickAccess />
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <UpcomingAppointmentsCard
-          viewAllHref="/dashboard/parent/appointments"
-          demoAppointments={demoAppointments.map((appointment, index) => ({
-            id: `demo-appointment-${index}`,
-            date: "",
-            time: appointment.time,
-            serviceId: appointment.service,
-            status: "confirmed",
-          }))}
-        />
-        <Card className="p-6">
-          <SectionTitle
-            title="Parent Community"
-            action={<Badge tone="neutral">Optional</Badge>}
-          />
-          <div className="rounded-[8px] bg-soft-blue p-5">
-            <p className="text-lg font-bold text-bluehope">
-              Connect with parents who understand a similar journey.
+      <div className="bluehope-enter">
+        <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+          <Card className="bg-soft-blue p-8">
+            <UserGreeting fallback="Welcome back!" />
+            <p className="mt-4 max-w-xl text-lg text-slate-600">
+              We are here to help you find the right support for your child and
+              their unique needs.
             </p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Community matching is a future moderated feature. These
-              preferences only tell BlueHope what you would like to hear about
-              when it is ready.
-            </p>
-          </div>
-          <CommunityPreferences />
-        </Card>
+            <div className="mt-7 grid gap-4 sm:grid-cols-3">
+              <div className="bluehope-lift rounded-[8px] bg-white p-4 hover:bg-blue-50">
+                <p className="text-sm font-semibold text-slate-500">
+                  Active child context
+                </p>
+                <p className="mt-1 text-lg font-bold text-slate-950">
+                  Aarav · Speech support
+                </p>
+              </div>
+              <div className="bluehope-lift rounded-[8px] bg-white p-4 hover:bg-blue-50">
+                <p className="text-sm font-semibold text-slate-500">
+                  Recommended next step
+                </p>
+                <p className="mt-1 text-lg font-bold text-slate-950">
+                  Compare 6 nearby therapists
+                </p>
+              </div>
+              <div className="bluehope-lift rounded-[8px] bg-white p-4 hover:bg-blue-50">
+                <p className="text-sm font-semibold text-slate-500">
+                  Marketplace loop
+                </p>
+                <p className="mt-1 text-lg font-bold text-slate-950">
+                  Contact · Book · Review
+                </p>
+              </div>
+            </div>
+            <LinkButton
+              href="/dashboard/parent/search"
+              className="mt-6"
+              variant="outline"
+            >
+              Search support
+            </LinkButton>
+          </Card>
+          <Card className="p-6">
+            <SectionTitle
+              title="Your Children"
+              action={
+                <LinkButton href="#" variant="ghost">
+                  View all
+                </LinkButton>
+              }
+            />
+            <div className="flex items-center gap-4 rounded-[8px] border border-slate-200 p-4">
+              <span className="h-16 w-16 rounded-full bg-slate-200" />
+              <div>
+                <p className="font-bold">Aarav Sharma</p>
+                <p className="text-sm text-slate-600">8 years old</p>
+                <p className="text-sm text-slate-600">Autism (ASD)</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+        <QuickAccess />
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <UpcomingAppointmentsCard
+            viewAllHref="/dashboard/parent/appointments"
+            demoAppointments={demoAppointments.map((appointment, index) => ({
+              id: `demo-appointment-${index}`,
+              date: "",
+              time: appointment.time,
+              serviceId: appointment.service,
+              status: "confirmed",
+            }))}
+          />
+          <Card className="p-6">
+            <SectionTitle
+              title="Parent Community"
+              action={<Badge tone="neutral">Optional</Badge>}
+            />
+            <div className="rounded-[8px] bg-soft-blue p-5">
+              <p className="text-lg font-bold text-bluehope">
+                Connect with parents who understand a similar journey.
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Community matching is a future moderated feature. These
+                preferences only tell BlueHope what you would like to hear about
+                when it is ready.
+              </p>
+            </div>
+            <CommunityPreferences />
+          </Card>
+        </div>
       </div>
     </DashboardShell>
   );
@@ -409,47 +411,49 @@ export function ParentDashboard() {
 export function AdminDashboard() {
   return (
     <DashboardShell nav={adminNav} roleLabel="Admin User" role="admin">
-      <h1 className="text-3xl font-extrabold text-slate-950">
-        Welcome back, Admin!
-      </h1>
-      <p className="mt-2 text-slate-600">
-        Here is what is happening across BlueHope.
-      </p>
-      <MetricGrid
-        items={[
-          ["Total Users", "2568", Users],
-          ["Total Providers", "842", CheckCircle2],
-          ["Total Enquires", "3675", HeartPulse],
-          ["Total Reviews", "1926", Star],
-          ["Total Page Views", "22,448", Eye],
-        ]}
-      />
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.95fr_0.65fr]">
-        <Card className="p-6">
-          <SectionTitle
-            title="Enquiries Overview"
-            action={<Badge tone="neutral">Last 7 days</Badge>}
-          />
-          <div className="h-72 rounded-[8px] bg-[linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[length:100%_48px]" />
-        </Card>
-        <AdminEnquiryCard />
-        <Card className="p-6">
-          <SectionTitle
-            title="User registration"
-            action={
-              <LinkButton href="#" variant="ghost">
-                View all
-              </LinkButton>
-            }
-          />
-          <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-full border-[18px] border-bluehope text-center">
-            <span>
-              <b>2568</b>
-              <br />
-              Total Users
-            </span>
-          </div>
-        </Card>
+      <div className="bluehope-enter">
+        <h1 className="text-3xl font-extrabold text-slate-950">
+          Welcome back, Admin!
+        </h1>
+        <p className="mt-2 text-slate-600">
+          Here is what is happening across BlueHope.
+        </p>
+        <MetricGrid
+          items={[
+            ["Total Users", "2568", Users],
+            ["Total Providers", "842", CheckCircle2],
+            ["Total Enquires", "3675", HeartPulse],
+            ["Total Reviews", "1926", Star],
+            ["Total Page Views", "22,448", Eye],
+          ]}
+        />
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.95fr_0.65fr]">
+          <Card className="p-6">
+            <SectionTitle
+              title="Enquiries Overview"
+              action={<Badge tone="neutral">Last 7 days</Badge>}
+            />
+            <div className="h-72 rounded-[8px] bg-[linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[length:100%_48px]" />
+          </Card>
+          <AdminEnquiryCard />
+          <Card className="p-6">
+            <SectionTitle
+              title="User registration"
+              action={
+                <LinkButton href="#" variant="ghost">
+                  View all
+                </LinkButton>
+              }
+            />
+            <div className="mx-auto flex h-40 w-40 items-center justify-center rounded-full border-[18px] border-bluehope text-center">
+              <span>
+                <b>2568</b>
+                <br />
+                Total Users
+              </span>
+            </div>
+          </Card>
+        </div>
       </div>
     </DashboardShell>
   );
@@ -496,7 +500,7 @@ function QuickAccess() {
           <Link
             key={title}
             href={href}
-            className="block transition hover:-translate-y-0.5"
+            className="bluehope-lift block rounded-[8px] transition"
           >
             <Card className="flex items-center gap-5 p-6">
               <span
@@ -524,7 +528,7 @@ function MetricGrid({
   return (
     <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
       {items.map(([label, value, Icon], index) => (
-        <Card key={label} className="flex items-center gap-5 bg-slate-50 p-6">
+        <Card key={label} className="flex items-center gap-5 bg-slate-50 p-6 hover:border-blue-200 hover:bg-blue-50/50">
           <span
             className={
               index % 2
