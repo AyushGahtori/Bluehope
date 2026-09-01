@@ -273,7 +273,9 @@ export function EditProfileSection({ ownerType }: { ownerType: "provider" | "ins
 
   useEffect(() => {
     let ignore = false;
-    if (!ignore) void loadProfile();
+    queueMicrotask(() => {
+      if (!ignore) void loadProfile();
+    });
     return () => {
       ignore = true;
     };
@@ -360,12 +362,14 @@ export function EditProfileSection({ ownerType }: { ownerType: "provider" | "ins
         showFeedback("error", "You need to be signed in to upload photos.");
         return;
       }
+      const uploadHeaders = { ...headers };
+      delete uploadHeaders["Content-Type"];
       for (const file of files.slice(0, 12)) {
         const formData = new FormData();
         formData.append("file", file);
         const response = await fetch("/api/media/upload", {
           method: "POST",
-          headers,
+          headers: uploadHeaders,
           body: formData,
         });
         const body: unknown = await response.json().catch(() => null);
