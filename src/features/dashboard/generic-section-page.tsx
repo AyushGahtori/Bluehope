@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { Card } from "@/components/ui/primitives";
 import { ProviderAvailabilityManager } from "@/features/dashboard/provider-availability-manager";
@@ -14,14 +15,12 @@ import {
   VerifyPlaceholder,
 } from "@/features/dashboard/provider-profile-sections";
 import {
-  ExploreSection,
   MyProfileSection,
-} from "@/features/dashboard/profile-and-explore-sections";
+} from "@/features/dashboard/provider-profile-view-section";
 
 const providerNav = [
   "Dashboard",
   "My Profile",
-  "Explore",
   "Inquiries",
   "Appointments",
   "Reviews & Ratings",
@@ -34,7 +33,6 @@ const providerNav = [
 const instituteNav = [
   "Dashboard",
   "My Profile",
-  "Explore",
   "Inquiries",
   "Appointments",
   "Reviews & Ratings",
@@ -75,6 +73,10 @@ export function GenericDashboardSectionPage({
         : "/dashboard/admin";
   const editHref = role === "institution" ? "/dashboard/institute/edit-profile" : "/dashboard/provider/edit-profile";
 
+  if (role !== "admin" && section === "explore") {
+    notFound();
+  }
+
   const providerSections: Record<string, React.ReactNode> = {
     availability: <ProviderAvailabilityManager />,
     messages: <ProviderMessagesSection />,
@@ -85,7 +87,6 @@ export function GenericDashboardSectionPage({
     "edit-profile": <EditProfileSection ownerType={role === "institution" ? "institution" : "provider"} />,
     verify: <VerifyPlaceholder />,
     profile: <MyProfileSection role={role === "institution" ? "institution" : "provider"} editHref={editHref} />,
-    explore: <ExploreSection />,
   };
 
   const content = providerSections[section] ?? (

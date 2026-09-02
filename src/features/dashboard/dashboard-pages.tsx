@@ -26,12 +26,17 @@ import {
   UpcomingAppointmentsCard,
 } from "@/features/dashboard/dashboard-data-cards";
 import {
+  ChildrenEmptyState,
+  ChildProfileCard,
+  primaryChildContext,
+  useChildProfiles,
+} from "@/features/dashboard/child-profiles";
+import {
   EmptyProfileState,
   ProfilePreview,
 } from "@/features/dashboard/profile-preview";
 import {
   authedApiHeaders,
-  isConfigurationPendingResponse,
 } from "@/lib/api-client";
 import { useStoredAuthUser } from "@/lib/auth-user-store";
 import { cn } from "@/lib/utils";
@@ -52,7 +57,6 @@ const parentNav = [
 const providerNav = [
   "Dashboard",
   "My Profile",
-  "Explore",
   "Inquiries",
   "Appointments",
   "Reviews & Ratings",
@@ -65,7 +69,6 @@ const providerNav = [
 const instituteNav = [
   "Dashboard",
   "My Profile",
-  "Explore",
   "Inquiries",
   "Appointments",
   "Reviews & Ratings",
@@ -310,6 +313,9 @@ export function InstituteDashboard() {
 }
 
 export function ParentDashboard() {
+  const { children } = useChildProfiles(true);
+  const primaryChild = children?.[0] ?? null;
+
   return (
     <DashboardShell nav={parentNav} roleLabel="Hi, Neha" role="parent">
       <div className="bluehope-enter">
@@ -326,7 +332,9 @@ export function ParentDashboard() {
                   Active child context
                 </p>
                 <p className="mt-1 text-lg font-bold text-slate-950">
-                  Aarav · Speech support
+                  {children === null
+                    ? "Loading..."
+                    : primaryChildContext(primaryChild)}
                 </p>
               </div>
               <div className="bluehope-lift rounded-[8px] bg-white p-4 hover:bg-blue-50">
@@ -358,19 +366,20 @@ export function ParentDashboard() {
             <SectionTitle
               title="Your Children"
               action={
-                <LinkButton href="#" variant="ghost">
+                <LinkButton href="/dashboard/parent/children" variant="ghost">
                   View all
                 </LinkButton>
               }
             />
-            <div className="flex items-center gap-4 rounded-[8px] border border-slate-200 p-4">
-              <span className="h-16 w-16 rounded-full bg-slate-200" />
-              <div>
-                <p className="font-bold">Aarav Sharma</p>
-                <p className="text-sm text-slate-600">8 years old</p>
-                <p className="text-sm text-slate-600">Autism (ASD)</p>
-              </div>
-            </div>
+            {children === null ? (
+              <p className="py-4 text-sm text-slate-500">
+                Loading child profiles...
+              </p>
+            ) : primaryChild ? (
+              <ChildProfileCard child={primaryChild} compact />
+            ) : (
+              <ChildrenEmptyState />
+            )}
           </Card>
         </div>
         <QuickAccess />

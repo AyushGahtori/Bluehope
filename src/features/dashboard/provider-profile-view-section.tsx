@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
-import { Button, Card, Input, SectionTitle } from "@/components/ui/primitives";
+import { Button, Card, SectionTitle } from "@/components/ui/primitives";
 import { ProfilePreview } from "@/features/dashboard/profile-preview";
 import { authedApiHeaders, isConfigurationPendingResponse } from "@/lib/api-client";
 
@@ -153,61 +151,3 @@ export function MyProfileSection({
   );
 }
 
-/**
- * Explore inside the authenticated dashboard shell. The sidebar and header
- * stay exactly as they are for the signed-in role — the user never feels
- * logged out. Search results open in the public marketplace.
- */
-export function ExploreSection() {
-  const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [area, setArea] = useState("");
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold text-slate-950">Explore BlueHope</h1>
-        <p className="mt-2 text-slate-600">
-          See how families find support on BlueHope. Your dashboard and account stay signed in.
-        </p>
-      </div>
-      <Card className="p-6">
-        <form
-          className="grid gap-3 md:grid-cols-[1fr_1fr_auto]"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const params = new URLSearchParams();
-            if (query.trim()) params.set("q", query.trim());
-            if (area.trim()) params.set("area", area.trim());
-            params.set("radius", "20");
-            router.push(`/search?${params.toString()}`);
-          }}
-        >
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Service, therapy, condition or provider"
-            aria-label="Search"
-          />
-          <Input
-            value={area}
-            onChange={(event) => setArea(event.target.value)}
-            placeholder="Area (e.g. Andheri West, Mumbai)"
-            aria-label="Area"
-          />
-          <Button type="submit" className="h-12">
-            <Search className="mr-2 h-4 w-4" />
-            Search
-          </Button>
-        </form>
-      </Card>
-      <Card className="bg-soft-blue p-6">
-        <p className="font-bold text-bluehope">Why explore?</p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          Understanding how families search helps you complete the profile sections that matter
-          most — services, conditions, and location — so your listing appears in the right results.
-        </p>
-      </Card>
-    </div>
-  );
-}

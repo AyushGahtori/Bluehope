@@ -7,6 +7,7 @@ export type ParentOnboardingData = {
   lastName: string;
   email: string;
   phone: string;
+  childFirstName?: string;
   relationship: string;
   age: string;
   conditionIds: string[];
@@ -121,6 +122,7 @@ export async function saveParentOnboarding(
         lastName: data.lastName || null,
         phone: data.phone || null,
         email: data.email || null,
+        childFirstName: data.childFirstName || null,
         age: data.age || null,
         conditionIds: data.conditionIds,
         locationContext: data.locationText

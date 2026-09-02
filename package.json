@@ -10,6 +10,9 @@
     "seed:firestore": "node scripts/seed-firestore.mjs"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.8.4",
+    "@dicebear/collection": "^9.4.2",
+    "@dicebear/core": "^9.4.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "firebase": "^12.18.0",

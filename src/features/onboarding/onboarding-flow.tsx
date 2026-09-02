@@ -142,6 +142,7 @@ export function OnboardingFlow({ role }: { role: Role }) {
     lastName: "",
     email: "",
     phone: "",
+    childFirstName: "",
     relationship: "",
     age: "",
   });
@@ -588,6 +589,8 @@ export function OnboardingFlow({ role }: { role: Role }) {
         nextErrors.phone = "Enter a valid phone number.";
       if (supportFor === "family" && !basicInfo.relationship)
         nextErrors.relationship = "Select a relationship.";
+      if (supportFor === "family" && !basicInfo.childFirstName.trim())
+        nextErrors.childFirstName = "Child name is required.";
       if (supportFor === "family" && !basicInfo.age)
         nextErrors.age = "Age is required.";
       setFieldErrors(nextErrors);
@@ -615,6 +618,7 @@ export function OnboardingFlow({ role }: { role: Role }) {
             lastName: basicInfo.lastName,
             email: basicInfo.email,
             phone: basicInfo.phone,
+            childFirstName: basicInfo.childFirstName,
             relationship: basicInfo.relationship,
             age: basicInfo.age,
             conditionIds: selectedConditionIds,
@@ -627,6 +631,34 @@ export function OnboardingFlow({ role }: { role: Role }) {
               ? "Your details were saved to your account."
               : "Saved on this device. Cloud sync activates once Firestore is enabled for the project.",
           );
+
+          const headers = await authedApiHeaders();
+          if (headers) {
+            const ageNumber = Number(basicInfo.age);
+            const birthYear =
+              Number.isFinite(ageNumber) && ageNumber > 0
+                ? new Date().getFullYear() - ageNumber
+                : undefined;
+            await fetch("/api/children", {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                relationship:
+                  supportFor === "myself"
+                    ? "self"
+                    : basicInfo.relationship || "child",
+                firstName:
+                  supportFor === "myself"
+                    ? basicInfo.firstName
+                    : basicInfo.childFirstName,
+                birthYear,
+                ageBand: basicInfo.age ? `${basicInfo.age} years` : undefined,
+                conditionIds: selectedConditionIds,
+                supportNeedIds: selectedConditionIds,
+                preferredServiceIds: [],
+              }),
+            }).catch(() => null);
+          }
         }
       } finally {
         setSaving(false);
@@ -931,6 +963,7 @@ function ParentStep({
     lastName: string;
     email: string;
     phone: string;
+    childFirstName: string;
     relationship: string;
     age: string;
   };
@@ -1000,13 +1033,13 @@ function ParentStep({
         <Field
           value={basicInfo.firstName}
           onChange={(value) => onBasicInfoChange("firstName", value)}
-          placeholder="First name"
+          placeholder="Parent first name"
           error={fieldErrors.firstName}
         />
         <Field
           value={basicInfo.lastName}
           onChange={(value) => onBasicInfoChange("lastName", value)}
-          placeholder="Last name"
+          placeholder="Parent last name"
           error={fieldErrors.lastName}
         />
         <Field
@@ -1025,6 +1058,12 @@ function ParentStep({
         />
         {supportFor === "family" ? (
           <>
+            <Field
+              value={basicInfo.childFirstName}
+              onChange={(value) => onBasicInfoChange("childFirstName", value)}
+              placeholder="Child first name"
+              error={fieldErrors.childFirstName}
+            />
             <div>
               <BlueSelect
                 value={basicInfo.relationship}

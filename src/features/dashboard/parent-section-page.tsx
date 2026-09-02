@@ -14,6 +14,7 @@ import {
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import {
   Badge,
+  Button,
   Card,
   LinkButton,
   SectionTitle,
@@ -22,8 +23,14 @@ import { demoAppointments, demoProviders } from "@/data/demo";
 import { ProviderCard } from "@/features/marketplace/provider-card";
 import { StoredNameField } from "@/features/dashboard/user-greeting";
 import { ConversationPanel } from "@/features/dashboard/provider-inbox-sections";
+import {
+  AddChildForm,
+  ChildrenEmptyState,
+  ChildProfileCard,
+  useChildProfiles,
+} from "@/features/dashboard/child-profiles";
 import { useStoredAuthUser } from "@/lib/auth-user-store";
-import { apiHeaders } from "@/lib/api-client";
+import { apiHeaders, authedApiHeaders } from "@/lib/api-client";
 
 const parentNav = [
   "Dashboard",
@@ -102,7 +109,9 @@ export function ParentSectionPage({ section }: { section: string }) {
             </p>
           </div>
         </div>
-        <LinkButton href="/dashboard/parent/search">Search</LinkButton>
+        {section === "children" ? null : (
+          <LinkButton href="/dashboard/parent/search">Search</LinkButton>
+        )}
       </div>
       {section === "saved" ? <SavedSection signedIn={Boolean(user)} /> : null}
       {section === "enquiries" ? (
@@ -651,23 +660,47 @@ function ResourcesSection() {
 }
 
 function ChildrenSection({ signedIn }: { signedIn: boolean }) {
+  const { children, error, refresh } = useChildProfiles(signedIn);
+  const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const deleteChild = async (childId: string) => {
+    setDeletingId(childId);
+    try {
+      const headers = await authedApiHeaders();
+      if (!headers) return;
+      const response = await fetch(`/api/children/${childId}`, {
+        method: "DELETE",
+        headers,
+      });
+      if (response.ok) await refresh();
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   if (!signedIn) {
     return (
       <Card className="p-6">
         <SectionTitle
           title="Child Profiles"
           action={
-            <LinkButton href="/onboarding/parent" variant="outline">
+            <Button variant="outline" onClick={() => setAdding(true)}>
               Add child
-            </LinkButton>
+            </Button>
           }
         />
-        <div className="rounded-[8px] border border-slate-200 p-5">
-          <p className="text-xl font-bold">Aarav Sharma</p>
-          <p className="mt-1 text-slate-600">
-            8 years old · Autism Spectrum Disorder · Speech support
-          </p>
-        </div>
+        {adding ? (
+          <AddChildForm
+            onCreated={() => {
+              setAdding(false);
+              void refresh();
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        ) : (
+          <ChildrenEmptyState />
+        )}
       </Card>
     );
   }
@@ -677,18 +710,45 @@ function ChildrenSection({ signedIn }: { signedIn: boolean }) {
       <SectionTitle
         title="Child Profiles"
         action={
-          <LinkButton href="/onboarding/parent" variant="outline">
+          <Button variant="outline" onClick={() => setAdding(true)}>
             Add child
-          </LinkButton>
+          </Button>
         }
       />
-      <div className="rounded-[8px] border border-dashed border-slate-300 p-8 text-center">
-        <UserRound className="mx-auto h-8 w-8 text-bluehope" />
-        <p className="mt-3 font-bold text-slate-950">No child profiles yet</p>
-        <p className="mt-1 text-sm text-slate-600">
-          Add a child profile so recommendations can match their age and support
-          needs. Child details stay private.
-        </p>
+      <div className="space-y-4">
+        {adding ? (
+          <AddChildForm
+            onCreated={() => {
+              setAdding(false);
+              void refresh();
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        ) : null}
+        {error ? (
+          <p className="text-sm font-semibold text-rose-600">{error}</p>
+        ) : null}
+        {children === null ? (
+          <p className="py-4 text-sm text-slate-500">
+            Loading child profiles...
+          </p>
+        ) : children.length === 0 ? (
+          <ChildrenEmptyState />
+        ) : (
+          <div className="grid gap-3">
+            {children.map((child) => (
+              <div
+                key={child.childId}
+                className={deletingId === child.childId ? "opacity-60" : ""}
+              >
+                <ChildProfileCard
+                  child={child}
+                  onDelete={(id) => void deleteChild(id)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </Card>
   );

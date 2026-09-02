@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 export function VerifyPlaceholder() {
   return (
     <DashboardShell
-      nav={["Dashboard", "My Profile", "Explore", "Inquiries", "Appointments", "Reviews & Ratings", "Messages", "Q&A", "Edit Profile", "Verify"]}
+      nav={["Dashboard", "My Profile", "Inquiries", "Appointments", "Reviews & Ratings", "Messages", "Q&A", "Edit Profile", "Verify"]}
       roleLabel="Verify"
       role="provider"
     >

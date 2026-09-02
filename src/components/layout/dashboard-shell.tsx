@@ -57,7 +57,6 @@ const iconMap = {
   "Reviews & Ratings": Star,
   Gallery: ImageIcon,
   Availability: CalendarCheck,
-  Explore: Search,
   "Q&A": HelpCircle,
   "Edit Profile": Pencil,
   Verify: ShieldCheck,
@@ -84,7 +83,6 @@ const parentLinks: Record<string, string> = {
 const providerLinks: Record<string, string> = {
   Dashboard: "/dashboard/provider",
   "My Profile": "/dashboard/provider/profile",
-  Explore: "/dashboard/provider/explore",
   Inquiries: "/dashboard/provider/enquiries",
   Appointments: "/dashboard/provider/appointments",
   "Reviews & Ratings": "/dashboard/provider/reviews",
@@ -97,7 +95,6 @@ const providerLinks: Record<string, string> = {
 const instituteLinks: Record<string, string> = {
   Dashboard: "/dashboard/institute",
   "My Profile": "/dashboard/institute/profile",
-  Explore: "/dashboard/institute/explore",
   Inquiries: "/dashboard/institute/enquiries",
   Appointments: "/dashboard/institute/appointments",
   "Reviews & Ratings": "/dashboard/institute/reviews",
@@ -459,12 +456,6 @@ export function DashboardShell({
             );
           })}
         </nav>
-        <div className="bluehope-lift mt-4 shrink-0 rounded-[8px] border border-blue-100 bg-blue-50 p-5">
-          <p className="font-bold text-slate-950">Need Help?</p>
-          <p className="mt-1 text-sm text-slate-600">
-            Our support team is here to assist you.
-          </p>
-        </div>
       </aside>
 
       <main className="lg:pl-80">

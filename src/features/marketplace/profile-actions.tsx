@@ -26,6 +26,10 @@ import {
 import type { ProviderSummary } from "@/types/domain";
 import { apiHeaders, storedAuthUser } from "@/lib/api-client";
 import { useSavedProvider } from "@/features/marketplace/save-provider-button";
+import {
+  childDisplayName,
+  useChildProfiles,
+} from "@/features/dashboard/child-profiles";
 import { cn } from "@/lib/utils";
 
 type ActionMode = "contact" | "booking" | null;
@@ -209,16 +213,29 @@ function ContactPanel({
   onDone: () => void;
 }) {
   const authUser = storedAuthUser();
+  const { children } = useChildProfiles(Boolean(authUser));
   const [form, setForm] = useState({
-    parentName: authUser?.name?.trim() || "Neha Sharma",
-    phone: "+91 98765 43210",
+    parentName: authUser?.name?.trim() || "",
+    phone: "",
     serviceId: profile.services[0] ?? "speech-therapy",
-    childName: "Aarav Sharma",
+    childName: "",
     message:
       "I am looking for support and would like to understand your availability.",
   });
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    const firstChild = children?.[0];
+    if (!firstChild || form.childName) return;
+    queueMicrotask(() => {
+      setForm((current) =>
+        current.childName
+          ? current
+          : { ...current, childName: childDisplayName(firstChild) },
+      );
+    });
+  }, [children, form.childName]);
 
   const submit = async () => {
     setError("");
@@ -275,7 +292,7 @@ function ContactPanel({
           onChange={(event) =>
             setForm({ ...form, childName: event.target.value })
           }
-          placeholder="Child context (optional)"
+          placeholder="Child name or context"
         />
         <textarea
           className="min-h-24 w-full rounded-[12px] border border-slate-300 bg-white p-4 text-sm outline-none focus:border-bluehope focus:ring-4 focus:ring-blue-100"
@@ -310,11 +327,13 @@ function BookingPanel({
     slotLabel: string;
   }) => void;
 }) {
+  const authUser = storedAuthUser();
   const [date, setDate] = useState(defaultDate);
   const [serviceId, setServiceId] = useState(
     profile.services[0] ?? "speech-therapy",
   );
-  const [childName, setChildName] = useState("Aarav Sharma");
+  const { children } = useChildProfiles(Boolean(authUser));
+  const [childName, setChildName] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
   const [slots, setSlots] = useState<AppointmentSlot[]>(
     generateSlotsForDate(defaultDate, []),
@@ -324,6 +343,14 @@ function BookingPanel({
 
   const opening = useMemo(() => getOpeningForDate(date), [date]);
   const selected = slots.find((slot) => slot.id === selectedSlot);
+
+  useEffect(() => {
+    const firstChild = children?.[0];
+    if (!firstChild || childName) return;
+    queueMicrotask(() => {
+      setChildName((current) => current || childDisplayName(firstChild));
+    });
+  }, [children, childName]);
 
   useEffect(() => {
     let ignore = false;
@@ -352,6 +379,10 @@ function BookingPanel({
   const submit = async () => {
     if (!selected) {
       setError("Please choose an available time slot.");
+      return;
+    }
+    if (!childName.trim()) {
+      setError("Please add the child name before booking.");
       return;
     }
 
@@ -402,7 +433,7 @@ function BookingPanel({
         <Input
           value={childName}
           onChange={(event) => setChildName(event.target.value)}
-          placeholder="Select child"
+          placeholder="Child name"
         />
         <BlueSelect
           value={serviceId}
