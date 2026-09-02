@@ -28,7 +28,7 @@ export function DevSessionBootstrap() {
 
     async function reconcile() {
       try {
-        const check = await fetch("/api/auth/dev-session", {
+        const check = await fetch("/api/account/dev-session", {
           method: "GET",
           cache: "no-store",
           credentials: "include",
@@ -45,7 +45,7 @@ export function DevSessionBootstrap() {
         // Dev server restarted (or cookie missing). Refresh the cookie so
         // subsequent requests succeed; if Clerk thinks we're still signed
         // in from the previous process, force a fresh sign-in.
-        await fetch("/api/auth/dev-session", {
+        await fetch("/api/account/dev-session", {
           method: "POST",
           credentials: "include",
         }).catch(() => null);

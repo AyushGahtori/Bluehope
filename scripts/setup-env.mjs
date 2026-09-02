@@ -37,7 +37,7 @@ const lines = [
   `FIREBASE_ADMIN_PROJECT_ID=${sa.project_id}`,
   `FIREBASE_ADMIN_CLIENT_EMAIL=${sa.client_email}`,
   `FIREBASE_ADMIN_PRIVATE_KEY="${sa.private_key.split(LF).join(BACKSLASH_N)}"`,
-  `FIREBASE_ADMIN_STORAGE_BUCKET=${webConfig.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}`,
+  `FIREBASE_ADMIN_STORAGE_BUCKET=${sa.project_id}.appspot.com`,
   "",
 ];
 

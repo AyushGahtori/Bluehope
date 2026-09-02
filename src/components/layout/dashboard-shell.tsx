@@ -135,7 +135,7 @@ function navHref(item: string, role: DashboardRole) {
 /**
  * Auth-aware route guard. The URL role segment is never trusted: the guard
  * resolves the account's authoritative role (stored role, confirmed against
- * users/{uid} via /api/auth/session when needed) and redirects to the correct
+ * users/{uid} via /api/account/session when needed) and redirects to the correct
  * dashboard when the route does not match. Content is blocked while checking
  * so a mismatched URL never flashes another role's dashboard.
  */
@@ -203,7 +203,7 @@ function useRoleGuard(expectedRole: DashboardRole) {
         // No locally known role: ask the server for the authoritative answer.
         try {
           const token = await user.getIdToken();
-          const response = await fetch("/api/auth/session", {
+          const response = await fetch("/api/account/session", {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (response.ok) {
@@ -291,7 +291,7 @@ export function DashboardShell({
 
       try {
         const token = await user.getIdToken();
-        const response = await fetch("/api/auth/session", {
+        const response = await fetch("/api/account/session", {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!response.ok || cancelled) return;

@@ -101,7 +101,7 @@ async function postEstablishRole(
 
   try {
     const idToken = await currentUser.getIdToken();
-    const response = await fetch("/api/auth/establish-role", {
+    const response = await fetch("/api/account/establish-role", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${idToken}`,

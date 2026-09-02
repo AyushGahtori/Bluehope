@@ -9,6 +9,20 @@ function normalizePrivateKey(value?: string) {
   return value?.replace(/\\n/g, "\n");
 }
 
+function adminStorageBucket() {
+  const configured =
+    process.env.FIREBASE_ADMIN_STORAGE_BUCKET ||
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
+
+  if (!configured) return projectId ? `${projectId}.appspot.com` : undefined;
+  if (configured.endsWith(".firebasestorage.app") && projectId) {
+    return `${projectId}.appspot.com`;
+  }
+
+  return configured;
+}
+
 export function hasFirebaseAdminConfig() {
   return Boolean(
     process.env.FIREBASE_ADMIN_PROJECT_ID &&
@@ -31,9 +45,7 @@ export function getFirebaseAdminApp(): App | null {
       clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
       privateKey: normalizePrivateKey(process.env.FIREBASE_ADMIN_PRIVATE_KEY),
     }),
-    storageBucket:
-      process.env.FIREBASE_ADMIN_STORAGE_BUCKET ||
-      process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    storageBucket: adminStorageBucket(),
   });
 }
 

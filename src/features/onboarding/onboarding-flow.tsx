@@ -273,7 +273,7 @@ export function OnboardingFlow({ role }: { role: Role }) {
   } | null> => {
     try {
       const token = await user.getIdToken();
-      const response = await fetch("/api/auth/session", {
+      const response = await fetch("/api/account/session", {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });

@@ -1,4 +1,6 @@
 import type { NextRequest } from "next/server";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import {
   FirestoreUnavailableError,
   getProviderProfileByOwner,
@@ -49,6 +51,36 @@ function hasImageMagicBytes(buffer: Buffer): boolean {
     return true;
   }
   return false;
+}
+
+function isMissingStorageBucket(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as {
+    code?: unknown;
+    message?: unknown;
+    errors?: Array<{ reason?: unknown; message?: unknown }>;
+  };
+
+  return (
+    candidate.code === 404 &&
+    (String(candidate.message ?? "").includes("bucket") ||
+      candidate.errors?.some(
+        (item) =>
+          item.reason === "notFound" &&
+          String(item.message ?? "").includes("bucket"),
+      ) === true)
+  );
+}
+
+async function saveLocalDevelopmentImage(
+  objectPath: string,
+  buffer: Buffer,
+): Promise<string> {
+  const pathParts = objectPath.split("/");
+  const localPath = join(process.cwd(), "public", "uploads", ...pathParts);
+  await mkdir(dirname(localPath), { recursive: true });
+  await writeFile(localPath, buffer);
+  return `/uploads/${pathParts.map(encodeURIComponent).join("/")}`;
 }
 
 /**
@@ -108,17 +140,29 @@ export async function POST(request: NextRequest) {
     const safeExtension = extension.replace(/[^a-z0-9]/g, "") || "jpg";
     const objectPath = `${kind === "institution" ? "institutions" : "providers"}/${profile.id}/gallery/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${safeExtension}`;
 
-    const bucket = storage.bucket();
-    await bucket.file(objectPath).save(buffer, {
-      contentType: file.type,
-      resumable: false,
-      metadata: { metadata: { ownerUid: auth.firebaseUid! } },
-    });
+    let publicUrl: string;
+    try {
+      const bucket = storage.bucket();
+      await bucket.file(objectPath).save(buffer, {
+        contentType: file.type,
+        resumable: false,
+        metadata: { metadata: { ownerUid: auth.firebaseUid! } },
+      });
 
-    // Public-read URL strategy for published profile media; the object itself
-    // stays owner-scoped by path and storage rules.
-    await bucket.file(objectPath).makePublic().catch(() => undefined);
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(objectPath)}`;
+      // Public-read URL strategy for published profile media; the object itself
+      // stays owner-scoped by path and storage rules.
+      await bucket.file(objectPath).makePublic().catch(() => undefined);
+      publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(objectPath)}`;
+    } catch (error) {
+      if (
+        process.env.NODE_ENV === "production" ||
+        !isMissingStorageBucket(error)
+      ) {
+        throw error;
+      }
+
+      publicUrl = await saveLocalDevelopmentImage(objectPath, buffer);
+    }
 
     const images = Array.from(new Set([...profile.images, publicUrl])).slice(0, 12);
     const updated = await upsertProviderProfile(auth.firebaseUid!, kind, { images });
