@@ -334,12 +334,21 @@ export async function listChildProfiles(uid: string, limit = 25) {
   const snapshot = await db()
     .collection(COLLECTIONS.childProfiles)
     .where("ownerUid", "==", uid)
-    .where("deletedAt", "==", null)
-    .orderBy("updatedAt", "desc")
     .limit(limit)
     .get();
 
-  return snapshot.docs.map((doc) => doc.data() as ChildProfileDocument);
+  return snapshot.docs
+    .map((doc) => doc.data() as ChildProfileDocument)
+    .filter((child) => !child.deletedAt)
+    .sort((first, second) => {
+      const firstUpdated = Number(
+        "toMillis" in first.updatedAt ? first.updatedAt.toMillis() : 0,
+      );
+      const secondUpdated = Number(
+        "toMillis" in second.updatedAt ? second.updatedAt.toMillis() : 0,
+      );
+      return secondUpdated - firstUpdated;
+    });
 }
 
 export async function createChildProfile(uid: string, body: unknown) {
@@ -354,10 +363,6 @@ export async function createChildProfile(uid: string, body: unknown) {
     childId: reference.id,
     ownerUid: uid,
     relationship: parsed.relationship,
-    firstName: parsed.firstName,
-    birthYear: parsed.birthYear,
-    ageBand: parsed.ageBand,
-    gender: parsed.gender,
     conditionIds: parsed.conditionIds,
     supportNeedIds: parsed.supportNeedIds,
     preferredServiceIds: parsed.preferredServiceIds,
@@ -372,6 +377,11 @@ export async function createChildProfile(uid: string, body: unknown) {
     updatedAt: now,
     deletedAt: null,
   };
+
+  if (parsed.firstName) child.firstName = parsed.firstName;
+  if (parsed.birthYear !== undefined) child.birthYear = parsed.birthYear;
+  if (parsed.ageBand) child.ageBand = parsed.ageBand;
+  if (parsed.gender) child.gender = parsed.gender;
 
   await reference.set(child);
   return child;

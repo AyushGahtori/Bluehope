@@ -416,14 +416,15 @@ function ChoiceChip({
     <button
       type="button"
       onClick={onClick}
+      data-active={selected}
       className={cn(
-        "bluehope-fill bluehope-lift rounded-full border px-3 py-2 text-sm font-semibold transition",
+        "bluehope-fill bluehope-lift rounded-full border px-3 py-2 text-sm font-semibold transition hover:text-white",
         selected
           ? "border-bluehope text-white"
           : "border-slate-200 bg-white text-slate-600 hover:border-blue-200",
       )}
     >
-      {children}
+      <span className="relative z-10">{children}</span>
     </button>
   );
 }
